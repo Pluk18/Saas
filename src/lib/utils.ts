@@ -80,13 +80,20 @@ export function formatCurrency(amount: number): string {
 }
 
 /**
- * Format ตัวเลขทั่วไป
+ * Format ตัวเลงทั่วไป
  */
 export function formatNumber(num: number, decimals: number = 2): string {
   return new Intl.NumberFormat('th-TH', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(num)
+}
+
+/**
+ * Format น้ำหนักทอง (บาท)
+ */
+export function formatWeight(baht: number): string {
+  return `${formatNumber(baht, 3)} บาท`
 }
 
 /**

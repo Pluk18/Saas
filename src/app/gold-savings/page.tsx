@@ -1,51 +1,61 @@
 'use client'
 
+import { useState } from 'react'
 import MainLayout from '@/components/Layout/MainLayout'
-import { PiggyBank, Plus, Search, TrendingUp } from 'lucide-react'
-import { formatCurrency, formatNumber } from '@/lib/utils'
+import { PiggyBank, Plus, Search, TrendingUp, TrendingDown, Eye, Edit, Trash2, Loader } from 'lucide-react'
+import { formatCurrency, formatWeight } from '@/lib/utils'
+import { useGoldSavings } from '@/hooks/useGoldSavings'
+import { useCustomers } from '@/hooks/useCustomers'
+import GoldSavingModal from '@/components/GoldSavings/GoldSavingModal'
+import DepositModal from '@/components/GoldSavings/DepositModal'
+import WithdrawModal from '@/components/GoldSavings/WithdrawModal'
+import DetailModal from '@/components/GoldSavings/DetailModal'
 
 export default function GoldSavingsPage() {
-  // Mock data
-  const accounts = [
-    {
-      id: '1',
-      code: 'SAVE-001',
-      customerName: 'คุณสมชาย ใจดี',
-      customerPhone: '0812345678',
-      targetWeight: 5.0,
-      currentWeight: 2.5,
-      totalDeposited: 97500,
-      averagePrice: 39000,
-      startDate: '2024-01-15',
-      status: 'active',
-    },
-    {
-      id: '2',
-      code: 'SAVE-002',
-      customerName: 'คุณสมหญิง ศรีสุข',
-      customerPhone: '0898765432',
-      targetWeight: 2.0,
-      currentWeight: 1.8,
-      totalDeposited: 70200,
-      averagePrice: 39000,
-      startDate: '2024-03-10',
-      status: 'active',
-    },
-    {
-      id: '3',
-      code: 'SAVE-003',
-      customerName: 'คุณประสิทธิ์ มั่งคั่ง',
-      customerPhone: '0856781234',
-      targetWeight: 10.0,
-      currentWeight: 8.5,
-      totalDeposited: 331500,
-      averagePrice: 39000,
-      startDate: '2023-12-01',
-      status: 'active',
-    },
-  ]
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'withdrawn'>('all')
+  
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false)
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [selectedSaving, setSelectedSaving] = useState<any>(null)
 
-  const currentGoldPrice = 39000 // ราคาทองปัจจุบัน
+  const filters = {
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    search: searchTerm || undefined,
+  }
+
+  const { savings, loading, addSaving, deposit, withdraw, refreshSavings } = useGoldSavings(filters)
+  const { customers } = useCustomers()
+
+  const handleDeposit = async (depositData: any) => {
+    await deposit(depositData)
+    refreshSavings()
+  }
+
+  const handleWithdraw = async (withdrawalData: any) => {
+    await withdraw(withdrawalData)
+    refreshSavings()
+  }
+
+  // Calculate stats
+  const stats = {
+    totalAccounts: savings.length,
+    totalBalance: savings.reduce((sum, s) => sum + (s.balance || 0), 0),
+  }
+
+  const statusColors = {
+    active: 'bg-green-100 text-green-800',
+    completed: 'bg-blue-100 text-blue-800',
+    withdrawn: 'bg-gray-100 text-gray-800',
+  }
+
+  const statusLabels = {
+    active: 'กำลังดำเนินการ',
+    completed: 'สำเร็จ',
+    withdrawn: 'ถอนแล้ว',
+  }
 
   return (
     <MainLayout>
@@ -60,29 +70,13 @@ export default function GoldSavingsPage() {
               บริการออมทองสำหรับลูกค้า - ล็อคน้ำหนักทองตามราคาวันทำรายการ
             </p>
           </div>
-          <button className="btn btn-primary flex items-center gap-2">
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="btn btn-primary flex items-center gap-2"
+          >
             <Plus size={18} />
             เปิดบัญชีใหม่
           </button>
-        </div>
-
-        {/* Current Gold Price */}
-        <div className="card bg-gradient-to-br from-accent-50 to-primary-100 border-primary-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-neutral-600 mb-1">ราคาทองคำแท่งวันนี้</p>
-              <p className="text-3xl font-bold text-primary-700 font-display">
-                {formatCurrency(currentGoldPrice)}/บาท
-              </p>
-              <p className="text-xs text-neutral-600 mt-2">
-                ฝาก 1,000 บาท = ได้ทอง {formatNumber(1000 / currentGoldPrice, 4)} บาท
-              </p>
-            </div>
-            <div className="flex items-center gap-2 bg-green-100 px-4 py-2 rounded-full">
-              <TrendingUp size={20} className="text-green-700" />
-              <span className="font-semibold text-green-700">+150 บาท</span>
-            </div>
-          </div>
         </div>
 
         {/* Stats */}
@@ -94,151 +88,163 @@ export default function GoldSavingsPage() {
               </div>
               <div>
                 <p className="text-sm text-neutral-600">บัญชีทั้งหมด</p>
-                <p className="text-2xl font-bold text-neutral-900 font-display">245</p>
+                <p className="text-2xl font-bold text-neutral-900 font-display">
+                  {stats.totalAccounts}
+                </p>
               </div>
             </div>
           </div>
 
           <div className="card">
             <div>
-              <p className="text-sm text-neutral-600 mb-1">เงินฝากรวม</p>
+              <p className="text-sm text-neutral-600 mb-1">ยอดเงินรวม</p>
               <p className="text-xl font-bold text-green-700 font-display">
-                {formatCurrency(15750000)}
-              </p>
-            </div>
-          </div>
-
-          <div className="card">
-            <div>
-              <p className="text-sm text-neutral-600 mb-1">น้ำหนักทองรวม</p>
-              <p className="text-xl font-bold text-accent-700 font-display">
-                {formatNumber(405.5, 2)} บาท
-              </p>
-            </div>
-          </div>
-
-          <div className="card">
-            <div>
-              <p className="text-sm text-neutral-600 mb-1">มูลค่าปัจจุบัน</p>
-              <p className="text-xl font-bold text-primary-700 font-display">
-                {formatCurrency(405.5 * currentGoldPrice)}
+                {formatCurrency(stats.totalBalance)}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Search */}
+        {/* Filters */}
         <div className="card">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
-            <input
-              type="text"
-              placeholder="ค้นหารหัสบัญชี, ชื่อลูกค้า..."
-              className="w-full pl-11 pr-4 py-2.5 rounded-lg border border-neutral-300 
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
+              <input
+                type="text"
+                placeholder="ค้นหารหัสบัญชี, ชื่อลูกค้า..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 rounded-lg border border-neutral-300 
+                         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="px-4 py-2.5 rounded-lg border border-neutral-300 
                        focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
+            >
+              <option value="all">ทุกสถานะ</option>
+              <option value="active">กำลังดำเนินการ</option>
+              <option value="completed">สำเร็จ</option>
+              <option value="withdrawn">ถอนแล้ว</option>
+            </select>
           </div>
         </div>
 
-        {/* Accounts Table */}
-        <div className="card">
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>รหัสบัญชี</th>
-                  <th>ลูกค้า</th>
-                  <th className="text-right">เป้าหมาย (บาท)</th>
-                  <th className="text-right">สะสมแล้ว (บาท)</th>
-                  <th className="text-right">เงินฝากรวม</th>
-                  <th className="text-right">ราคาเฉลี่ย</th>
-                  <th className="text-center">ความคืบหน้า</th>
-                  <th>เปิดบัญชีเมื่อ</th>
-                  <th className="text-center">การจัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((account) => {
-                  const progress = (account.currentWeight / account.targetWeight) * 100
-                  const currentValue = account.currentWeight * currentGoldPrice
-                  const profitLoss = currentValue - account.totalDeposited
-                  const profitLossPercent = (profitLoss / account.totalDeposited) * 100
-
-                  return (
-                    <tr key={account.id}>
-                      <td className="font-mono font-medium text-primary-700">
-                        {account.code}
-                      </td>
-                      <td>
-                        <div>
-                          <p className="font-medium">{account.customerName}</p>
-                          <p className="text-xs text-neutral-500">{account.customerPhone}</p>
-                        </div>
-                      </td>
-                      <td className="text-right font-medium">
-                        {formatNumber(account.targetWeight, 2)} บาท
-                      </td>
-                      <td className="text-right">
-                        <p className="font-semibold text-accent-700">
-                          {formatNumber(account.currentWeight, 2)} บาท
-                        </p>
-                        <p className="text-xs text-neutral-500">
-                          ({formatNumber(account.currentWeight * 15.244, 2)}g)
-                        </p>
-                      </td>
-                      <td className="text-right">
-                        <p className="font-medium">{formatCurrency(account.totalDeposited)}</p>
-                        <p className={`text-xs ${profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {profitLoss >= 0 ? '+' : ''}{formatCurrency(profitLoss)}
-                          ({profitLossPercent >= 0 ? '+' : ''}{formatNumber(profitLossPercent, 1)}%)
-                        </p>
-                      </td>
-                      <td className="text-right font-medium text-neutral-700">
-                        {formatCurrency(account.averagePrice)}
-                      </td>
-                      <td>
-                        <div className="px-2">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-medium text-neutral-700">
-                              {progress.toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-neutral-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full transition-all ${
-                                progress >= 100
-                                  ? 'bg-green-600'
-                                  : progress >= 75
-                                  ? 'bg-accent-600'
-                                  : 'bg-primary-600'
-                              }`}
-                              style={{ width: `${Math.min(progress, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="text-neutral-700">
-                        {new Date(account.startDate).toLocaleDateString('th-TH', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </td>
-                      <td className="text-center space-x-2">
-                        <button className="btn btn-primary btn-sm">
-                          ฝากเงิน
-                        </button>
-                        <button className="btn btn-outline btn-sm">
-                          ดูรายละเอียด
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        {/* Loading State */}
+        {loading ? (
+          <div className="card">
+            <div className="flex items-center justify-center py-12">
+              <Loader className="animate-spin mr-2" size={24} />
+              <span className="text-neutral-600">กำลังโหลดข้อมูล...</span>
+            </div>
           </div>
-        </div>
+        ) : savings.length === 0 ? (
+          <div className="card">
+            <div className="text-center py-12">
+              <PiggyBank size={48} className="mx-auto text-neutral-300 mb-4" />
+              <p className="text-neutral-600 mb-2">ยังไม่มีบัญชีออมทอง</p>
+              <p className="text-sm text-neutral-500">
+                คลิก "เปิดบัญชีใหม่" เพื่อสร้างบัญชีออมทองสำหรับลูกค้า
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* Accounts Table */
+          <div className="card">
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>รหัสบัญชี</th>
+                    <th>ลูกค้า</th>
+                    <th className="text-right">ยอดเงินคงเหลือ</th>
+                    <th className="text-center">สถานะ</th>
+                    <th className="text-center">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savings.map((saving) => {
+                    return (
+                      <tr key={saving.id}>
+                        <td className="font-mono font-medium text-primary-700">
+                          {saving.account_code}
+                        </td>
+                        <td>
+                          <div>
+                            <p className="font-medium">
+                              {saving.customer?.first_name} {saving.customer?.last_name}
+                            </p>
+                            <p className="text-xs text-neutral-500">
+                              {saving.customer?.phone}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="text-right font-semibold text-green-700">
+                          {formatCurrency(saving.balance || 0)}
+                        </td>
+                        <td className="text-center">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              statusColors[saving.status]
+                            }`}
+                          >
+                            {statusLabels[saving.status]}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {saving.status === 'active' && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedSaving(saving)
+                                    setIsDepositModalOpen(true)
+                                  }}
+                                  className="text-green-600 hover:text-green-700"
+                                  title="ฝากเงิน"
+                                >
+                                  <TrendingUp size={18} />
+                                </button>
+                                {(saving.balance || 0) > 0 && (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedSaving(saving)
+                                      setIsWithdrawModalOpen(true)
+                                    }}
+                                    className="text-red-600 hover:text-red-700"
+                                    title="ถอนทอง"
+                                  >
+                                    <TrendingDown size={18} />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            <button
+                              onClick={() => {
+                                setSelectedSaving(saving)
+                                setIsDetailModalOpen(true)
+                              }}
+                              className="text-blue-600 hover:text-blue-700"
+                              title="ดูรายละเอียด"
+                            >
+                              <Eye size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Info Card */}
         <div className="card bg-blue-50 border-blue-200">
@@ -252,7 +258,52 @@ export default function GoldSavingsPage() {
           </ul>
         </div>
       </div>
+
+      {/* Modals */}
+      <GoldSavingModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSave={addSaving}
+        customers={customers}
+        mode="create"
+      />
+
+      <DepositModal
+        isOpen={isDepositModalOpen}
+        onClose={() => {
+          setIsDepositModalOpen(false)
+          setSelectedSaving(null)
+        }}
+        saving={selectedSaving}
+        onSuccess={handleDeposit}
+      />
+
+      <WithdrawModal
+        isOpen={isWithdrawModalOpen}
+        onClose={() => {
+          setIsWithdrawModalOpen(false)
+          setSelectedSaving(null)
+        }}
+        saving={selectedSaving}
+        onSuccess={handleWithdraw}
+      />
+
+      <DetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false)
+          setSelectedSaving(null)
+        }}
+        savingId={selectedSaving?.id || null}
+        onDepositClick={() => {
+          setIsDetailModalOpen(false)
+          setIsDepositModalOpen(true)
+        }}
+        onWithdrawClick={() => {
+          setIsDetailModalOpen(false)
+          setIsWithdrawModalOpen(true)
+        }}
+      />
     </MainLayout>
   )
 }
-

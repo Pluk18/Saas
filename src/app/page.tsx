@@ -3,38 +3,21 @@
 import MainLayout from '@/components/Layout/MainLayout'
 import StatsCard from '@/components/Dashboard/StatsCard'
 import GoldPriceCard from '@/components/Dashboard/GoldPriceCard'
+import { useDashboard } from '@/hooks/useDashboard'
 import { 
   DollarSign, 
   Package, 
   Users, 
   TrendingUp,
   ShoppingCart,
-  Handshake,
+  Coins,
   Clock
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import Link from 'next/link'
 
 export default function DashboardPage() {
-  // Mock data - จะเชื่อมต่อกับ Supabase จริงในภายหลัง
-  const todayStats = {
-    sales: 1250000,
-    transactions: 8,
-    customers: 12,
-    profit: 180000,
-  }
-
-  const goldPrices = {
-    bar: {
-      buy: 38800,
-      sell: 39000,
-      change: 150,
-    },
-    jewelry: {
-      buy: 38300,
-      sell: 39500,
-      change: 200,
-    },
-  }
+  const { stats, goldPrice, loading } = useDashboard()
 
   const recentTransactions = [
     { id: '1', code: 'INV-20241219-001', customer: 'คุณสมชาย ใจดี', amount: 125000, time: '10:30', type: 'ขาย' },
@@ -59,20 +42,25 @@ export default function DashboardPage() {
             <TrendingUp className="text-primary-600" size={24} />
             ราคาทองคำวันนี้
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <GoldPriceCard
-              type="bar"
-              buyPrice={goldPrices.bar.buy}
-              sellPrice={goldPrices.bar.sell}
-              change={goldPrices.bar.change}
-            />
-            <GoldPriceCard
-              type="jewelry"
-              buyPrice={goldPrices.jewelry.buy}
-              sellPrice={goldPrices.jewelry.sell}
-              change={goldPrices.jewelry.change}
-            />
-          </div>
+          {loading || !goldPrice ? (
+            <div className="text-center py-12">
+              <div className="animate-spin w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-neutral-600">กำลังโหลดราคาทอง...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <GoldPriceCard
+                type="bar"
+                buyPrice={goldPrice.gold_bar_buy}
+                sellPrice={goldPrice.gold_bar_sell}
+              />
+              <GoldPriceCard
+                type="jewelry"
+                buyPrice={goldPrice.gold_jewelry_buy}
+                sellPrice={goldPrice.gold_jewelry_sell}
+              />
+            </div>
+          )}
         </div>
 
         {/* Stats Section */}
@@ -80,34 +68,42 @@ export default function DashboardPage() {
           <h2 className="text-xl font-display font-semibold text-neutral-800 mb-4">
             สถิติวันนี้
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatsCard
-              title="ยอดขายวันนี้"
-              value={formatCurrency(todayStats.sales)}
-              icon={DollarSign}
-              color="success"
-              trend={{ value: 12.5, isPositive: true }}
-            />
-            <StatsCard
-              title="จำนวนรายการ"
-              value={todayStats.transactions}
-              icon={ShoppingCart}
-              color="primary"
-            />
-            <StatsCard
-              title="ลูกค้าวันนี้"
-              value={todayStats.customers}
-              icon={Users}
-              color="info"
-            />
-            <StatsCard
-              title="กำไรสุทธิ"
-              value={formatCurrency(todayStats.profit)}
-              icon={TrendingUp}
-              color="warning"
-              trend={{ value: 8.3, isPositive: true }}
-            />
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="card animate-pulse">
+                  <div className="h-20 bg-neutral-200 rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <StatsCard
+                title="ยอดขายวันนี้"
+                value={formatCurrency(stats.todaySales)}
+                icon={DollarSign}
+                color="success"
+              />
+              <StatsCard
+                title="จำนวนรายการ"
+                value={stats.transactionCount}
+                icon={ShoppingCart}
+                color="primary"
+              />
+              <StatsCard
+                title="สินค้าในสต๊อก"
+                value={stats.inventoryCount}
+                icon={Package}
+                color="info"
+              />
+              <StatsCard
+                title="มูลค่าคงคลัง"
+                value={formatCurrency(stats.inventoryValue)}
+                icon={TrendingUp}
+                color="warning"
+              />
+            </div>
+          )}
         </div>
 
         {/* Recent Transactions & Quick Actions */}
@@ -137,7 +133,7 @@ export default function DashboardPage() {
                         {transaction.type === 'ขาย' ? (
                           <ShoppingCart size={18} className="text-green-700" />
                         ) : (
-                          <Handshake size={18} className="text-blue-700" />
+                          <Coins size={18} className="text-blue-700" />
                         )}
                       </div>
                       <div>
@@ -166,44 +162,54 @@ export default function DashboardPage() {
               เมนูด่วน
             </h3>
             <div className="space-y-3">
-              <button className="btn btn-primary w-full justify-center">
+              <Link href="/pos" className="btn btn-primary w-full justify-center">
                 <ShoppingCart size={18} />
                 ขายสินค้า (POS)
-              </button>
-              <button className="btn btn-outline w-full justify-center">
+              </Link>
+              <Link href="/inventory" className="btn btn-outline w-full justify-center">
                 <Package size={18} />
                 เพิ่มสินค้าใหม่
-              </button>
-              <button className="btn btn-outline w-full justify-center">
-                <Handshake size={18} />
+              </Link>
+              <Link href="/consignments" className="btn btn-outline w-full justify-center">
+                <Coins size={18} />
                 ขายฝาก/จำนำ
-              </button>
-              <button className="btn btn-outline w-full justify-center">
+              </Link>
+              <Link href="/customers" className="btn btn-outline w-full justify-center">
                 <Users size={18} />
                 เพิ่มลูกค้าใหม่
-              </button>
+              </Link>
             </div>
 
             <div className="mt-6 pt-6 border-t border-neutral-200">
               <h4 className="text-sm font-semibold text-neutral-700 mb-3">
                 คลังสินค้า
               </h4>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-neutral-600">สินค้าทั้งหมด</span>
-                  <span className="font-semibold text-neutral-900">245 ชิ้น</span>
+              {loading ? (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-4 bg-neutral-200 rounded"></div>
+                  <div className="h-4 bg-neutral-200 rounded"></div>
+                  <div className="h-4 bg-neutral-200 rounded"></div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-neutral-600">น้ำหนักรวม</span>
-                  <span className="font-semibold text-neutral-900">85.5 บาท</span>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-600">สินค้าทั้งหมด</span>
+                    <span className="font-semibold text-neutral-900">{stats.inventoryCount} ชิ้น</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-600">มูลค่าคงคลัง</span>
+                    <span className="font-semibold text-primary-700">
+                      {formatCurrency(stats.inventoryValue)}
+                    </span>
+                  </div>
+                  <Link 
+                    href="/inventory" 
+                    className="block text-sm text-primary-600 hover:text-primary-700 mt-3"
+                  >
+                    ดูทั้งหมด →
+                  </Link>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-neutral-600">มูลค่าคงคลัง</span>
-                  <span className="font-semibold text-primary-700">
-                    {formatCurrency(3250000)}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

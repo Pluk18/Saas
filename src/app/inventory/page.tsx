@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import MainLayout from '@/components/Layout/MainLayout'
+import ProductModal from '@/components/Inventory/ProductModal'
+import DeleteConfirmModal from '@/components/Inventory/DeleteConfirmModal'
+import { useProducts } from '@/hooks/useProducts'
 import { 
   Package, 
   Plus, 
@@ -18,64 +21,62 @@ import { formatCurrency, formatNumber } from '@/lib/utils'
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
+  const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<any>(null)
 
-  // Mock data
+  const { products, loading, addProduct, editProduct, removeProduct } = useProducts({
+    category: selectedCategory,
+    search: searchQuery
+  })
+
+  // Mock categories - จะดึงจาก database ในภายหลัง
   const categories = [
-    { id: 'all', name: 'ทั้งหมด', count: 245 },
-    { id: 'ring', name: 'แหวน', count: 85 },
-    { id: 'necklace', name: 'สร้อยคอ', count: 65 },
-    { id: 'bracelet', name: 'กำไล', count: 45 },
-    { id: 'earring', name: 'ต่างหู', count: 30 },
-    { id: 'pendant', name: 'จี้', count: 20 },
+    { id: 'all', name: 'ทั้งหมด', count: products.length },
+    { id: 'ring', name: 'แหวน', count: products.filter(p => p.product_type === 'ring').length },
+    { id: 'necklace', name: 'สร้อยคอ', count: products.filter(p => p.product_type === 'necklace').length },
+    { id: 'bracelet', name: 'กำไล', count: products.filter(p => p.product_type === 'bracelet').length },
+    { id: 'earring', name: 'ต่างหู', count: products.filter(p => p.product_type === 'earring').length },
+    { id: 'pendant', name: 'จี้', count: products.filter(p => p.product_type === 'pendant').length },
   ]
 
-  const products = [
-    {
-      id: '1',
-      code: 'RING-001',
-      name: 'แหวนทองคำ ลายฉลุ',
-      category: 'แหวน',
-      weight: 0.5,
-      weightGrams: 7.622,
-      pattern: 'ลายไทย',
-      laborCost: 2500,
-      goldPrice: 19400,
-      sellingPrice: 21900,
-      stock: 3,
-      status: 'available',
-    },
-    {
-      id: '2',
-      code: 'NECK-001',
-      name: 'สร้อยคอทอง 2 สลึง',
-      category: 'สร้อยคอ',
-      weight: 2.0,
-      weightGrams: 30.488,
-      pattern: 'ลายเกลียว',
-      laborCost: 8000,
-      goldPrice: 77600,
-      sellingPrice: 85600,
-      stock: 1,
-      status: 'available',
-    },
-    {
-      id: '3',
-      code: 'BRAC-001',
-      name: 'กำไลทอง 1 บาท',
-      category: 'กำไล',
-      weight: 1.0,
-      weightGrams: 15.244,
-      pattern: 'ลายดอกไม้',
-      laborCost: 5000,
-      goldPrice: 38800,
-      sellingPrice: 43800,
-      stock: 2,
-      status: 'available',
-    },
-  ]
+  const totalInventoryValue = products.reduce((sum, p) => sum + ((p.selling_price || 0) * p.stock_quantity), 0)
+  const totalWeight = products.reduce((sum, p) => sum + (p.weight_baht * p.stock_quantity), 0)
 
-  const totalInventoryValue = products.reduce((sum, p) => sum + (p.sellingPrice * p.stock), 0)
-  const totalWeight = products.reduce((sum, p) => sum + (p.weight * p.stock), 0)
+  const handleAddProduct = () => {
+    setModalMode('create')
+    setSelectedProduct(null)
+    setIsModalOpen(true)
+  }
+
+  const handleEditProduct = (product: any) => {
+    setModalMode('edit')
+    setSelectedProduct(product)
+    setIsModalOpen(true)
+  }
+
+  const handleDeleteClick = (product: any) => {
+    setProductToDelete(product)
+    setIsDeleteModalOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (productToDelete) {
+      await removeProduct(productToDelete.id)
+      setIsDeleteModalOpen(false)
+      setProductToDelete(null)
+    }
+  }
+
+  const handleSaveProduct = async (productData: any) => {
+    if (modalMode === 'create') {
+      await addProduct(productData)
+    } else if (selectedProduct) {
+      await editProduct(selectedProduct.id, productData)
+    }
+  }
 
   return (
     <MainLayout>
@@ -93,7 +94,10 @@ export default function InventoryPage() {
               <Download size={18} />
               ส่งออกข้อมูล
             </button>
-            <button className="btn btn-primary flex items-center gap-2">
+            <button 
+              onClick={handleAddProduct}
+              className="btn btn-primary flex items-center gap-2"
+            >
               <Plus size={18} />
               เพิ่มสินค้าใหม่
             </button>
@@ -109,7 +113,9 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-sm text-neutral-600">สินค้าทั้งหมด</p>
-                <p className="text-2xl font-bold text-neutral-900 font-display">245</p>
+                <p className="text-2xl font-bold text-neutral-900 font-display">
+                  {loading ? '...' : products.length}
+                </p>
               </div>
             </div>
           </div>
@@ -122,7 +128,7 @@ export default function InventoryPage() {
               <div>
                 <p className="text-sm text-neutral-600">น้ำหนักรวม</p>
                 <p className="text-2xl font-bold text-neutral-900 font-display">
-                  {formatNumber(totalWeight, 2)} บาท
+                  {loading ? '...' : formatNumber(totalWeight, 2)} บาท
                 </p>
               </div>
             </div>
@@ -136,7 +142,7 @@ export default function InventoryPage() {
               <div>
                 <p className="text-sm text-neutral-600">มูลค่าคงคลัง</p>
                 <p className="text-2xl font-bold text-green-700 font-display">
-                  {formatCurrency(totalInventoryValue)}
+                  {loading ? '...' : formatCurrency(totalInventoryValue)}
                 </p>
               </div>
             </div>
@@ -187,104 +193,151 @@ export default function InventoryPage() {
 
         {/* Products Table */}
         <div className="card">
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>รหัสสินค้า</th>
-                  <th>ชื่อสินค้า</th>
-                  <th>หมวดหมู่</th>
-                  <th className="text-right">น้ำหนัก (บาท)</th>
-                  <th className="text-right">ราคาทอง</th>
-                  <th className="text-right">ค่ากำเหน็จ</th>
-                  <th className="text-right">ราคาขาย</th>
-                  <th className="text-center">คงเหลือ</th>
-                  <th className="text-center">สถานะ</th>
-                  <th className="text-center">การจัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id}>
-                    <td className="font-mono font-medium text-primary-700">
-                      {product.code}
-                    </td>
-                    <td>
-                      <div>
-                        <p className="font-medium">{product.name}</p>
-                        <p className="text-xs text-neutral-500">{product.pattern}</p>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge badge-neutral">{product.category}</span>
-                    </td>
-                    <td className="text-right">
-                      <div>
-                        <p className="font-medium">{formatNumber(product.weight, 2)} บาท</p>
-                        <p className="text-xs text-neutral-500">
-                          ({formatNumber(product.weightGrams, 3)} กรัม)
-                        </p>
-                      </div>
-                    </td>
-                    <td className="text-right font-medium">
-                      {formatCurrency(product.goldPrice)}
-                    </td>
-                    <td className="text-right font-medium text-accent-700">
-                      {formatCurrency(product.laborCost)}
-                    </td>
-                    <td className="text-right font-bold text-primary-700">
-                      {formatCurrency(product.sellingPrice)}
-                    </td>
-                    <td className="text-center">
-                      <span className={`badge ${
-                        product.stock > 2 ? 'badge-success' : 
-                        product.stock > 0 ? 'badge-warning' : 
-                        'badge-danger'
-                      }`}>
-                        {product.stock} ชิ้น
-                      </span>
-                    </td>
-                    <td className="text-center">
-                      <span className="badge badge-success">
-                        พร้อมขาย
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex items-center justify-center gap-2">
-                        <button className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors">
-                          <Eye size={16} />
-                        </button>
-                        <button className="p-2 rounded-lg hover:bg-primary-50 text-primary-600 transition-colors">
-                          <Edit size={16} />
-                        </button>
-                        <button className="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between pt-6 border-t border-neutral-200 mt-6">
-            <p className="text-sm text-neutral-600">
-              แสดง 1-3 จาก 245 รายการ
-            </p>
-            <div className="flex gap-2">
-              <button className="btn btn-secondary" disabled>
-                ← ก่อนหน้า
-              </button>
-              <button className="btn btn-primary">
-                ถัดไป →
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-neutral-600">กำลังโหลดข้อมูล...</p>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="text-center py-12">
+              <Package size={48} className="mx-auto mb-4 text-neutral-300" />
+              <p className="text-neutral-600 mb-2">ไม่พบสินค้า</p>
+              <button onClick={handleAddProduct} className="btn btn-primary btn-sm">
+                เพิ่มสินค้าใหม่
               </button>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>รหัสสินค้า</th>
+                      <th>ชื่อสินค้า</th>
+                      <th>หมวดหมู่</th>
+                      <th className="text-right">น้ำหนัก (บาท)</th>
+                      <th className="text-right">ค่ากำเหน็จ</th>
+                      <th className="text-right">ราคาขาย</th>
+                      <th className="text-center">คงเหลือ</th>
+                      <th className="text-center">สถานะ</th>
+                      <th className="text-center">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((product) => (
+                      <tr key={product.id}>
+                        <td className="font-mono font-medium text-primary-700">
+                          {product.product_code}
+                        </td>
+                        <td>
+                          <div>
+                            <p className="font-medium">{product.product_name}</p>
+                            {product.pattern_name && (
+                              <p className="text-xs text-neutral-500">{product.pattern_name}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge badge-neutral">
+                            {product.product_categories?.category_name || product.product_type}
+                          </span>
+                        </td>
+                        <td className="text-right">
+                          <div>
+                            <p className="font-medium">{formatNumber(product.weight_baht, 2)} บาท</p>
+                            <p className="text-xs text-neutral-500">
+                              ({formatNumber(product.weight_grams, 3)} กรัม)
+                            </p>
+                          </div>
+                        </td>
+                        <td className="text-right font-medium text-accent-700">
+                          {formatCurrency(product.labor_cost)}
+                        </td>
+                        <td className="text-right font-bold text-primary-700">
+                          {formatCurrency(product.selling_price || 0)}
+                        </td>
+                        <td className="text-center">
+                          <span className={`badge ${
+                            product.stock_quantity > 2 ? 'badge-success' : 
+                            product.stock_quantity > 0 ? 'badge-warning' : 
+                            'badge-danger'
+                          }`}>
+                            {product.stock_quantity} ชิ้น
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <span className={`badge ${
+                            product.status === 'available' ? 'badge-success' :
+                            product.status === 'reserved' ? 'badge-warning' :
+                            product.status === 'sold' ? 'badge-neutral' :
+                            'badge-info'
+                          }`}>
+                            {product.status === 'available' ? 'พร้อมขาย' :
+                             product.status === 'reserved' ? 'จอง' :
+                             product.status === 'sold' ? 'ขายแล้ว' :
+                             'ฝากขาย'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex items-center justify-center gap-2">
+                            <button className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors">
+                              <Eye size={16} />
+                            </button>
+                            <button 
+                              onClick={() => handleEditProduct(product)}
+                              className="p-2 rounded-lg hover:bg-primary-50 text-primary-600 transition-colors"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteClick(product)}
+                              className="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between pt-6 border-t border-neutral-200 mt-6">
+                <p className="text-sm text-neutral-600">
+                  แสดง {products.length} รายการ
+                </p>
+                <div className="flex gap-2">
+                  <button className="btn btn-secondary" disabled>
+                    ← ก่อนหน้า
+                  </button>
+                  <button className="btn btn-primary" disabled>
+                    ถัดไป →
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Product Modal */}
+      <ProductModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveProduct}
+        product={selectedProduct}
+        mode={modalMode}
+      />
+
+      {/* Delete Confirm Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        productName={productToDelete?.product_name || ''}
+      />
     </MainLayout>
   )
 }
-

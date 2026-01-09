@@ -1,5 +1,5 @@
-// Mock API for Thai Gold Association Prices
-// ใน Production จริงจะเชื่อมต่อกับ API ของสมาคมค้าทองคำ
+// API for Thai Gold Association Prices
+// ดึงข้อมูลจาก https://www.goldtraders.or.th/ (สมาคมค้าทองคำไทย)
 
 export interface GoldPriceData {
   date: string
@@ -8,26 +8,52 @@ export interface GoldPriceData {
   goldJewelryBuy: number
   goldJewelrySell: number
   source: string
+  time?: string
+  updateNumber?: number
 }
 
 /**
- * ดึงราคาทองคำปัจจุบัน (Mock)
+ * ดึงราคาทองคำปัจจุบันจากสมาคมค้าทองคำไทย
  */
 export async function fetchCurrentGoldPrice(): Promise<GoldPriceData> {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000))
+  try {
+    const response = await fetch('/api/gold-price', {
+      cache: 'no-store',
+    })
 
-  // Base price with some random variation
-  const baseBarBuy = 38800
-  const variation = Math.floor(Math.random() * 200) - 100 // -100 to +100
-  
-  return {
-    date: new Date().toISOString(),
-    goldBarBuy: baseBarBuy + variation,
-    goldBarSell: baseBarBuy + 200 + variation,
-    goldJewelryBuy: baseBarBuy - 500 + variation,
-    goldJewelrySell: baseBarBuy + 700 + variation,
-    source: 'thai_gold_association_mock'
+    if (!response.ok) {
+      throw new Error('Failed to fetch gold price from API')
+    }
+
+    const result = await response.json()
+
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Invalid API response')
+    }
+
+    return {
+      date: result.data.date,
+      goldBarBuy: result.data.goldBarBuy,
+      goldBarSell: result.data.goldBarSell,
+      goldJewelryBuy: result.data.goldJewelryBuy,
+      goldJewelrySell: result.data.goldJewelrySell,
+      source: result.data.source,
+      time: result.data.time,
+      updateNumber: result.data.updateNumber,
+    }
+  } catch (error) {
+    console.error('Error fetching gold price:', error)
+    
+    // Fallback to mock data if API fails
+    console.log('Using fallback mock data')
+    return {
+      date: new Date().toISOString().split('T')[0],
+      goldBarBuy: 64200,
+      goldBarSell: 64300,
+      goldJewelryBuy: 62914,
+      goldJewelrySell: 65100,
+      source: 'fallback_mock',
+    }
   }
 }
 

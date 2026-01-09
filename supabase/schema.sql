@@ -205,6 +205,10 @@ CREATE TABLE sales_transactions (
     total_amount DECIMAL(12,2) NOT NULL, -- ยอดรวมสุทธิ
     payment_method VARCHAR(20) DEFAULT 'cash', -- cash, transfer, card, mixed
     payment_status VARCHAR(20) DEFAULT 'paid', -- paid, pending, partial
+    cash_amount DECIMAL(12,2) DEFAULT 0, -- ยอดชำระด้วยเงินสด
+    transfer_amount DECIMAL(12,2) DEFAULT 0, -- ยอดชำระด้วยการโอนเงิน
+    card_amount DECIMAL(12,2) DEFAULT 0, -- ยอดชำระด้วยบัตรเครดิต
+    include_vat BOOLEAN DEFAULT true, -- รวม VAT หรือไม่
     tax_invoice_number VARCHAR(50), -- เลขที่ใบกำกับภาษี
     sold_by UUID, -- พนักงานขาย
     notes TEXT,
@@ -407,6 +411,82 @@ WHERE c.status = 'active'
     AND c.due_date >= CURRENT_DATE 
     AND c.due_date <= CURRENT_DATE + INTERVAL '30 days'
 ORDER BY c.due_date ASC;
+
+-- ============================================
+-- ROW LEVEL SECURITY (RLS) POLICIES
+-- ============================================
+-- Enable RLS on all tables
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gold_prices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE consignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE consignment_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gold_savings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gold_saving_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sales_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sales_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trade_in_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for anon access (for development)
+-- NOTE: In production, you should implement proper authentication and restrict these policies
+
+-- Customers policies
+CREATE POLICY "Allow all operations on customers" ON customers
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Gold prices policies
+CREATE POLICY "Allow all operations on gold_prices" ON gold_prices
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Product categories policies
+CREATE POLICY "Allow all operations on product_categories" ON product_categories
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Products policies
+CREATE POLICY "Allow all operations on products" ON products
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Consignments policies
+CREATE POLICY "Allow all operations on consignments" ON consignments
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Consignment payments policies
+CREATE POLICY "Allow all operations on consignment_payments" ON consignment_payments
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Gold savings policies
+CREATE POLICY "Allow all operations on gold_savings" ON gold_savings
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Gold saving transactions policies
+CREATE POLICY "Allow all operations on gold_saving_transactions" ON gold_saving_transactions
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Sales transactions policies
+CREATE POLICY "Allow all operations on sales_transactions" ON sales_transactions
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Sales items policies
+CREATE POLICY "Allow all operations on sales_items" ON sales_items
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Trade in items policies
+CREATE POLICY "Allow all operations on trade_in_items" ON trade_in_items
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Employees policies
+CREATE POLICY "Allow all operations on employees" ON employees
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Audit logs policies (read-only for regular users)
+CREATE POLICY "Allow read on audit_logs" ON audit_logs
+    FOR SELECT USING (true);
+
+CREATE POLICY "Allow insert on audit_logs" ON audit_logs
+    FOR INSERT WITH CHECK (true);
 
 -- ============================================
 -- COMMENTS

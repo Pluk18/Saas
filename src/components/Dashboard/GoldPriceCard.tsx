@@ -49,7 +49,13 @@ export default function GoldPriceCard({ type, buyPrice, sellPrice, change }: Gol
 
       <div className="mt-3 pt-3 border-t border-primary-100">
         <p className="text-xs text-neutral-500 text-center">
-          อัพเดทล่าสุด: {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
+          <span className="inline-flex items-center gap-1">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            อัพเดทล่าสุด: {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
+          </span>
+        </p>
+        <p className="text-xs text-neutral-400 text-center mt-1">
+          ข้อมูลจากสมาคมค้าทองคำไทย
         </p>
       </div>
     </div>
