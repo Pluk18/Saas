@@ -1000,3 +1000,484 @@ export async function calculateGoldSavingSummary(gold_saving_id: string) {
     transactionCount: saving.transactions?.length || 0,
   }
 }
+
+// ============================================
+// REPORTS API
+// ============================================
+
+// Sales Reports
+export async function getSalesReport(startDate: string, endDate: string, filters?: {
+  paymentMethod?: string
+  customerId?: string
+}) {
+  let query = supabase
+    .from('sales_transactions')
+    .select(`
+      *,
+      customers (
+        customer_name,
+        phone_number
+      ),
+      sales_items (
+        *,
+        products (
+          product_name,
+          product_code
+        )
+      )
+    `)
+    .gte('sale_date', startDate)
+    .lte('sale_date', endDate)
+    .order('sale_date', { ascending: false })
+
+  if (filters?.paymentMethod && filters.paymentMethod !== 'all') {
+    query = query.eq('payment_method', filters.paymentMethod)
+  }
+
+  if (filters?.customerId) {
+    query = query.eq('customer_id', filters.customerId)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getSalesSummary(startDate: string, endDate: string) {
+  const { data: sales, error } = await supabase
+    .from('sales_transactions')
+    .select('*')
+    .gte('sale_date', startDate)
+    .lte('sale_date', endDate)
+
+  if (error) throw error
+
+  const totalSales = sales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0
+  const totalDiscount = sales?.reduce((sum, sale) => sum + (sale.discount_amount || 0), 0) || 0
+  const totalTradeIn = sales?.reduce((sum, sale) => sum + (sale.trade_in_amount || 0), 0) || 0
+  const totalVat = sales?.reduce((sum, sale) => sum + (sale.vat_amount || 0), 0) || 0
+  const netAmount = totalSales - totalDiscount - totalTradeIn + totalVat
+  const transactionCount = sales?.length || 0
+  const averagePerTransaction = transactionCount > 0 ? netAmount / transactionCount : 0
+
+  return {
+    totalSales,
+    totalDiscount,
+    totalTradeIn,
+    totalVat,
+    netAmount,
+    transactionCount,
+    averagePerTransaction
+  }
+}
+
+export async function getDailySalesReport(startDate: string, endDate: string) {
+  const { data: sales, error } = await supabase
+    .from('sales_transactions')
+    .select('*')
+    .gte('sale_date', startDate)
+    .lte('sale_date', endDate)
+    .order('sale_date', { ascending: true })
+
+  if (error) throw error
+
+  // Group by date
+  const dailyData: Record<string, any> = {}
+
+  sales?.forEach((sale) => {
+    const date = sale.sale_date.split('T')[0]
+    if (!dailyData[date]) {
+      dailyData[date] = {
+        date,
+        count: 0,
+        totalSales: 0,
+        discount: 0,
+        tradeIn: 0,
+        vat: 0,
+        net: 0
+      }
+    }
+
+    dailyData[date].count++
+    dailyData[date].totalSales += sale.total_amount || 0
+    dailyData[date].discount += sale.discount_amount || 0
+    dailyData[date].tradeIn += sale.trade_in_amount || 0
+    dailyData[date].vat += sale.vat_amount || 0
+    dailyData[date].net = dailyData[date].totalSales - dailyData[date].discount - dailyData[date].tradeIn + dailyData[date].vat
+  })
+
+  return Object.values(dailyData)
+}
+
+export async function getTopSellingProducts(startDate: string, endDate: string, limit: number = 10) {
+  const { data, error } = await supabase
+    .from('sales_items')
+    .select(`
+      *,
+      products (
+        product_id,
+        product_name,
+        product_code
+      ),
+      sales_transactions!inner (
+        sale_date
+      )
+    `)
+    .gte('sales_transactions.sale_date', startDate)
+    .lte('sales_transactions.sale_date', endDate)
+
+  if (error) throw error
+
+  // Group by product
+  const productData: Record<string, any> = {}
+
+  data?.forEach((item: any) => {
+    const productId = item.product_id
+    if (!productData[productId]) {
+      productData[productId] = {
+        productId,
+        productName: item.products?.product_name || 'Unknown',
+        productCode: item.products?.product_code || '',
+        quantity: 0,
+        totalValue: 0
+      }
+    }
+
+    productData[productId].quantity++
+    productData[productId].totalValue += item.sale_price || 0
+  })
+
+  return Object.values(productData)
+    .sort((a: any, b: any) => b.totalValue - a.totalValue)
+    .slice(0, limit)
+}
+
+export async function getPaymentMethodBreakdown(startDate: string, endDate: string) {
+  const { data, error } = await supabase
+    .from('sales_transactions')
+    .select('payment_method, total_amount')
+    .gte('sale_date', startDate)
+    .lte('sale_date', endDate)
+
+  if (error) throw error
+
+  const breakdown: Record<string, any> = {}
+
+  data?.forEach((sale) => {
+    const method = sale.payment_method || 'unknown'
+    if (!breakdown[method]) {
+      breakdown[method] = {
+        method,
+        count: 0,
+        totalAmount: 0
+      }
+    }
+
+    breakdown[method].count++
+    breakdown[method].totalAmount += sale.total_amount || 0
+  })
+
+  return Object.values(breakdown)
+}
+
+// Inventory Reports
+export async function getInventoryReport() {
+  const { data, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      product_categories (
+        category_name
+      )
+    `)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getInventorySummary() {
+  const { data: products, error } = await supabase
+    .from('products')
+    .select('*')
+    .is('deleted_at', null)
+
+  if (error) throw error
+
+  const totalProducts = products?.length || 0
+  const availableProducts = products?.filter(p => p.status === 'available').length || 0
+  const soldProducts = products?.filter(p => p.status === 'sold').length || 0
+  const totalValue = products
+    ?.filter(p => p.status === 'available')
+    .reduce((sum, p) => sum + (p.sale_price || 0), 0) || 0
+
+  return {
+    totalProducts,
+    availableProducts,
+    soldProducts,
+    totalValue
+  }
+}
+
+// Customer Reports
+export async function getCustomerReport() {
+  const { data, error } = await supabase
+    .from('customers')
+    .select(`
+      *,
+      sales_transactions (
+        transaction_id,
+        total_amount,
+        sale_date
+      )
+    `)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getTopCustomers(startDate: string, endDate: string, limit: number = 10) {
+  const { data: sales, error } = await supabase
+    .from('sales_transactions')
+    .select(`
+      customer_id,
+      total_amount,
+      customers (
+        customer_name,
+        phone_number
+      )
+    `)
+    .gte('sale_date', startDate)
+    .lte('sale_date', endDate)
+    .not('customer_id', 'is', null)
+
+  if (error) throw error
+
+  // Group by customer
+  const customerData: Record<string, any> = {}
+
+  sales?.forEach((sale: any) => {
+    const customerId = sale.customer_id
+    if (!customerId) return
+
+    if (!customerData[customerId]) {
+      customerData[customerId] = {
+        customerId,
+        customerName: sale.customers?.customer_name || 'Unknown',
+        phoneNumber: sale.customers?.phone_number || '',
+        purchaseCount: 0,
+        totalAmount: 0
+      }
+    }
+
+    customerData[customerId].purchaseCount++
+    customerData[customerId].totalAmount += sale.total_amount || 0
+  })
+
+  return Object.values(customerData)
+    .sort((a: any, b: any) => b.totalAmount - a.totalAmount)
+    .slice(0, limit)
+}
+
+export async function getNewCustomers(startDate: string, endDate: string) {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('*')
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+// Consignment Reports
+export async function getConsignmentReport(filters?: {
+  status?: string
+}) {
+  let query = supabase
+    .from('consignments')
+    .select(`
+      *,
+      customers (
+        customer_name,
+        phone_number
+      )
+    `)
+    .order('consignment_date', { ascending: false })
+
+  if (filters?.status && filters.status !== 'all') {
+    query = query.eq('status', filters.status)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getConsignmentSummary() {
+  const { data: consignments, error } = await supabase
+    .from('consignments')
+    .select('*')
+
+  if (error) throw error
+
+  const totalConsignments = consignments?.length || 0
+  const activeConsignments = consignments?.filter(c => c.status === 'active').length || 0
+  const expiredConsignments = consignments?.filter(c => c.status === 'expired').length || 0
+  const redeemedConsignments = consignments?.filter(c => c.status === 'redeemed').length || 0
+  const totalValue = consignments
+    ?.filter(c => c.status === 'active')
+    .reduce((sum, c) => sum + (c.loan_amount || 0), 0) || 0
+
+  // Calculate expected interest
+  const expectedInterest = consignments
+    ?.filter(c => c.status === 'active')
+    .reduce((sum, c) => {
+      const principal = c.loan_amount || 0
+      const rate = c.interest_rate || 0
+      // Simple interest calculation (monthly)
+      const interest = (principal * rate) / 100
+      return sum + interest
+    }, 0) || 0
+
+  return {
+    totalConsignments,
+    activeConsignments,
+    expiredConsignments,
+    redeemedConsignments,
+    totalValue,
+    expectedInterest
+  }
+}
+
+export async function getExpiringConsignments(days: number = 7) {
+  const today = new Date()
+  const futureDate = new Date()
+  futureDate.setDate(today.getDate() + days)
+
+  const { data, error } = await supabase
+    .from('consignments')
+    .select(`
+      *,
+      customers (
+        customer_name,
+        phone_number
+      )
+    `)
+    .eq('status', 'active')
+    .lte('due_date', futureDate.toISOString().split('T')[0])
+    .order('due_date', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
+// Gold Savings Reports
+export async function getGoldSavingsReport(filters?: {
+  status?: string
+}) {
+  let query = supabase
+    .from('gold_savings')
+    .select(`
+      *,
+      customers (
+        customer_name,
+        phone_number
+      )
+    `)
+    .order('created_at', { ascending: false })
+
+  if (filters?.status && filters.status !== 'all') {
+    query = query.eq('status', filters.status)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getGoldSavingsSummary() {
+  const { data: savings, error } = await supabase
+    .from('gold_savings')
+    .select('*')
+
+  if (error) throw error
+
+  const totalAccounts = savings?.length || 0
+  const activeAccounts = savings?.filter(s => s.status === 'active').length || 0
+  const closedAccounts = savings?.filter(s => s.status === 'closed').length || 0
+  const totalBalance = savings
+    ?.filter(s => s.status === 'active')
+    .reduce((sum, s) => sum + (s.balance || 0), 0) || 0
+
+  return {
+    totalAccounts,
+    activeAccounts,
+    closedAccounts,
+    totalBalance
+  }
+}
+
+export async function getNearGoalAccounts(threshold: number = 90) {
+  const { data: savings, error } = await supabase
+    .from('gold_savings')
+    .select(`
+      *,
+      customers (
+        customer_name,
+        phone_number
+      )
+    `)
+    .eq('status', 'active')
+    .not('target_amount', 'is', null)
+
+  if (error) throw error
+
+  // Filter accounts near goal
+  const nearGoal = savings?.filter(s => {
+    if (!s.target_amount || s.target_amount === 0) return false
+    const progress = (s.balance / s.target_amount) * 100
+    return progress >= threshold
+  }) || []
+
+  return nearGoal
+}
+
+export async function getGoldSavingsTransactionReport(startDate: string, endDate: string) {
+  const { data, error } = await supabase
+    .from('gold_saving_transactions')
+    .select(`
+      *,
+      gold_savings!inner (
+        account_number,
+        customers (
+          customer_name
+        )
+      )
+    `)
+    .gte('transaction_date', startDate)
+    .lte('transaction_date', endDate)
+    .order('transaction_date', { ascending: false })
+
+  if (error) throw error
+
+  const deposits = data?.filter(t => t.transaction_type === 'deposit') || []
+  const withdrawals = data?.filter(t => t.transaction_type === 'withdrawal') || []
+
+  const totalDeposits = deposits.reduce((sum, t) => sum + (t.amount || 0), 0)
+  const totalWithdrawals = withdrawals.reduce((sum, t) => sum + (t.amount || 0), 0)
+
+  return {
+    transactions: data || [],
+    depositCount: deposits.length,
+    withdrawalCount: withdrawals.length,
+    totalDeposits,
+    totalWithdrawals
+  }
+}
