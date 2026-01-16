@@ -197,3 +197,25 @@ export function formatThaiPhone(phone: string): string {
   return phone
 }
 
+/**
+ * Timezone utilities for Thailand (GMT+7 / Asia/Bangkok)
+ */
+
+/**
+ * แปลง Date เป็น Thailand timezone และ return YYYY-MM-DD format
+ */
+export function getThailandDate(date: Date = new Date()): string {
+  // Convert to Thailand timezone and return YYYY-MM-DD format
+  const thailandDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
+  const year = thailandDate.getFullYear()
+  const month = String(thailandDate.getMonth() + 1).padStart(2, '0')
+  const day = String(thailandDate.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * แปลง Date เป็น Thailand timezone และ return ISO string
+ */
+export function getThailandDateTime(date: Date = new Date()): string {
+  return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' })).toISOString()
+}

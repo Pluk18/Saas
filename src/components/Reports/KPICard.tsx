@@ -1,61 +1,35 @@
 import { LucideIcon } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
 
 interface KPICardProps {
   title: string
-  value: number | string
+  value: string | number
   icon: LucideIcon
-  trend?: {
-    value: number
-    isPositive: boolean
-  }
-  colorClass?: string
-  format?: 'currency' | 'number' | 'text'
+  gradient: string
+  iconBg: string
+  subtitle?: string
 }
 
 export default function KPICard({
   title,
   value,
   icon: Icon,
-  trend,
-  colorClass = 'from-primary-50 to-primary-100 border-primary-200',
-  format = 'currency'
+  gradient,
+  iconBg,
+  subtitle
 }: KPICardProps) {
-  const iconBgClass = colorClass.includes('green')
-    ? 'bg-green-600'
-    : colorClass.includes('blue')
-    ? 'bg-blue-600'
-    : colorClass.includes('accent')
-    ? 'bg-accent-600'
-    : colorClass.includes('amber')
-    ? 'bg-amber-600'
-    : 'bg-primary-600'
-
-  const formatValue = () => {
-    if (format === 'currency' && typeof value === 'number') {
-      return formatCurrency(value)
-    }
-    if (format === 'number' && typeof value === 'number') {
-      return value.toLocaleString('th-TH')
-    }
-    return value
-  }
-
   return (
-    <div className={`card bg-gradient-to-br ${colorClass}`}>
+    <div className={`card ${gradient} border-opacity-50`}>
       <div className="flex items-center gap-3">
-        <div className={`w-12 h-12 rounded-lg ${iconBgClass} flex items-center justify-center flex-shrink-0`}>
-          <Icon size={24} className="text-white" />
+        <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center`}>
+          <Icon size={20} className="text-white" />
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-neutral-600 mb-1">{title}</p>
-          <p className="text-2xl font-bold text-neutral-900 font-display truncate">
-            {formatValue()}
+        <div className="flex-1">
+          <p className="text-sm text-neutral-600">{title}</p>
+          <p className="text-2xl font-bold text-neutral-900 font-display">
+            {value}
           </p>
-          {trend && (
-            <p className={`text-sm mt-1 ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-              {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
-            </p>
+          {subtitle && (
+            <p className="text-xs text-neutral-500 mt-1">{subtitle}</p>
           )}
         </div>
       </div>

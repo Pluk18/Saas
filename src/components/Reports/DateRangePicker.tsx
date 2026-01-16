@@ -2,116 +2,122 @@
 
 import { useState, useEffect } from 'react'
 import { Calendar } from 'lucide-react'
+import { getThailandDate } from '@/lib/utils'
+
+export type DateRangePreset = 'today' | 'week' | 'month' | 'custom'
 
 interface DateRangePickerProps {
-  startDate: string
-  endDate: string
-  onDateChange: (startDate: string, endDate: string) => void
+  onRangeChange: (startDate: string, endDate: string) => void
+  defaultPreset?: DateRangePreset
 }
 
-export default function DateRangePicker({
-  startDate,
-  endDate,
-  onDateChange
+export default function DateRangePicker({ 
+  onRangeChange,
+  defaultPreset = 'month'
 }: DateRangePickerProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('custom')
+  const [preset, setPreset] = useState<DateRangePreset>(defaultPreset)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
-  const handlePeriodChange = (period: string) => {
-    setSelectedPeriod(period)
+  useEffect(() => {
     const today = new Date()
-    let newStartDate = ''
-    let newEndDate = today.toISOString().split('T')[0]
+    let start = new Date()
+    let end = new Date()
 
-    switch (period) {
+    switch (preset) {
       case 'today':
-        newStartDate = newEndDate
+        start = today
+        end = today
         break
       case 'week':
-        const weekAgo = new Date(today)
-        weekAgo.setDate(today.getDate() - 7)
-        newStartDate = weekAgo.toISOString().split('T')[0]
+        start.setDate(today.getDate() - 7)
+        end = today
         break
       case 'month':
-        const monthAgo = new Date(today)
-        monthAgo.setMonth(today.getMonth() - 1)
-        newStartDate = monthAgo.toISOString().split('T')[0]
+        start.setDate(today.getDate() - 30)
+        end = today
         break
-      case 'year':
-        const yearAgo = new Date(today)
-        yearAgo.setFullYear(today.getFullYear() - 1)
-        newStartDate = yearAgo.toISOString().split('T')[0]
-        break
-      default:
+      case 'custom':
+        // Keep current dates
         return
     }
 
-    onDateChange(newStartDate, newEndDate)
+    // Convert to Thailand timezone date string
+    const startStr = getThailandDate(start)
+    const endStr = getThailandDate(end)
+    
+    setStartDate(startStr)
+    setEndDate(endStr)
+    onRangeChange(startStr, endStr)
+  }, [preset])
+
+  const handleCustomDateChange = () => {
+    if (startDate && endDate) {
+      onRangeChange(startDate, endDate)
+    }
   }
 
   return (
     <div className="card">
       <div className="flex flex-wrap gap-4 items-end">
-        {/* Quick Period Selection */}
+        {/* Preset Buttons */}
         <div className="flex gap-2">
           <button
-            onClick={() => handlePeriodChange('today')}
-            className={`btn ${selectedPeriod === 'today' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setPreset('today')}
+            className={`btn ${preset === 'today' ? 'btn-primary' : 'btn-outline'}`}
           >
             วันนี้
           </button>
           <button
-            onClick={() => handlePeriodChange('week')}
-            className={`btn ${selectedPeriod === 'week' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setPreset('week')}
+            className={`btn ${preset === 'week' ? 'btn-primary' : 'btn-outline'}`}
           >
-            7 วัน
+            7 วันล่าสุด
           </button>
           <button
-            onClick={() => handlePeriodChange('month')}
-            className={`btn ${selectedPeriod === 'month' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setPreset('month')}
+            className={`btn ${preset === 'month' ? 'btn-primary' : 'btn-outline'}`}
           >
-            30 วัน
+            30 วันล่าสุด
           </button>
           <button
-            onClick={() => handlePeriodChange('year')}
-            className={`btn ${selectedPeriod === 'year' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setPreset('custom')}
+            className={`btn ${preset === 'custom' ? 'btn-primary' : 'btn-outline'}`}
           >
-            1 ปี
+            กำหนดเอง
           </button>
         </div>
 
-        {/* Custom Date Range */}
-        <div className="flex-1 flex gap-4 items-end min-w-[400px]">
-          <div className="flex-1">
-            <label className="label">วันที่เริ่มต้น</label>
-            <div className="relative">
-              <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+        {/* Custom Date Inputs */}
+        {preset === 'custom' && (
+          <>
+            <div className="flex-1 min-w-[200px]">
+              <label className="label">วันที่เริ่มต้น</label>
               <input
                 type="date"
+                className="input"
                 value={startDate}
-                onChange={(e) => {
-                  setSelectedPeriod('custom')
-                  onDateChange(e.target.value, endDate)
-                }}
-                className="input pl-10"
+                onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
-          </div>
-          <div className="flex-1">
-            <label className="label">วันที่สิ้นสุด</label>
-            <div className="relative">
-              <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <div className="flex-1 min-w-[200px]">
+              <label className="label">วันที่สิ้นสุด</label>
               <input
                 type="date"
+                className="input"
                 value={endDate}
-                onChange={(e) => {
-                  setSelectedPeriod('custom')
-                  onDateChange(startDate, e.target.value)
-                }}
-                className="input pl-10"
+                onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
-          </div>
-        </div>
+            <button
+              onClick={handleCustomDateChange}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Calendar size={18} />
+              แสดงข้อมูล
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

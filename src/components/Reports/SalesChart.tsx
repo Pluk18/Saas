@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { BarChart3, TrendingUp } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -10,44 +11,46 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
-  ResponsiveContainer
+  ResponsiveContainer,
+  Legend
 } from 'recharts'
-import { BarChart3, TrendingUp } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface SalesChartProps {
   data: Array<{
     date: string
-    totalSales?: number
-    net?: number
-    count?: number
+    totalNet: number
+    count: number
   }>
   title?: string
 }
 
-export default function SalesChart({ data, title = 'กราฟยอดขาย' }: SalesChartProps) {
+export default function SalesChart({ data, title = 'ยอดขายรายวัน' }: SalesChartProps) {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line')
 
-  // Format date for display
-  const formattedData = data.map(item => ({
-    ...item,
-    displayDate: new Date(item.date).toLocaleDateString('th-TH', {
+  // Format data for chart
+  const chartData = data.map(item => ({
+    date: new Date(item.date).toLocaleDateString('th-TH', {
       month: 'short',
       day: 'numeric'
-    })
+    }),
+    ยอดขาย: item.totalNet,
+    จำนวนบิล: item.count
   }))
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-4 border border-neutral-200 rounded-lg shadow-lg">
-          <p className="font-medium text-neutral-900 mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatCurrency(entry.value)}
+        <div className="bg-white p-3 rounded-lg shadow-lg border border-neutral-200">
+          <p className="font-medium text-neutral-900 mb-1">{payload[0].payload.date}</p>
+          <p className="text-sm text-primary-600">
+            ยอดขาย: {formatCurrency(payload[0].value)}
+          </p>
+          {payload[1] && (
+            <p className="text-sm text-accent-600">
+              จำนวนบิล: {payload[1].value}
             </p>
-          ))}
+          )}
         </div>
       )
     }
@@ -63,66 +66,79 @@ export default function SalesChart({ data, title = 'กราฟยอดขา�
         <div className="flex gap-2">
           <button
             onClick={() => setChartType('line')}
-            className={`btn btn-sm ${chartType === 'line' ? 'btn-primary' : 'btn-outline'}`}
+            className={`btn btn-sm ${chartType === 'line' ? 'btn-primary' : 'btn-outline'} flex items-center gap-2`}
           >
             <TrendingUp size={16} />
+            กราฟเส้น
           </button>
           <button
             onClick={() => setChartType('bar')}
-            className={`btn btn-sm ${chartType === 'bar' ? 'btn-primary' : 'btn-outline'}`}
+            className={`btn btn-sm ${chartType === 'bar' ? 'btn-primary' : 'btn-outline'} flex items-center gap-2`}
           >
             <BarChart3 size={16} />
+            กราฟแท่ง
           </button>
         </div>
       </div>
 
-      <div className="w-full h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          {chartType === 'line' ? (
-            <LineChart data={formattedData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                dataKey="displayDate"
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-                tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="net"
-                name="ยอดสุทธิ"
-                stroke="#d4af37"
-                strokeWidth={2}
-                dot={{ fill: '#d4af37', r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          ) : (
-            <BarChart data={formattedData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                dataKey="displayDate"
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-                tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Bar dataKey="net" name="ยอดสุทธิ" fill="#d4af37" />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
+      <ResponsiveContainer width="100%" height={300}>
+        {chartType === 'line' ? (
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="date"
+              stroke="#6b7280"
+              style={{ fontSize: '12px' }}
+            />
+            <YAxis
+              stroke="#6b7280"
+              style={{ fontSize: '12px' }}
+              tickFormatter={(value) => {
+                if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+                if (value >= 1000) return `${(value / 1000).toFixed(0)}K`
+                return value.toString()
+              }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="ยอดขาย"
+              stroke="#D4AF37"
+              strokeWidth={2}
+              dot={{ fill: '#D4AF37', r: 4 }}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        ) : (
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="date"
+              stroke="#6b7280"
+              style={{ fontSize: '12px' }}
+            />
+            <YAxis
+              stroke="#6b7280"
+              style={{ fontSize: '12px' }}
+              tickFormatter={(value) => {
+                if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+                if (value >= 1000) return `${(value / 1000).toFixed(0)}K`
+                return value.toString()
+              }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend />
+            <Bar dataKey="ยอดขาย" fill="#D4AF37" />
+          </BarChart>
+        )}
+      </ResponsiveContainer>
+
+      {data.length === 0 && (
+        <div className="text-center py-12 text-neutral-500">
+          ไม่มีข้อมูลในช่วงเวลานี้
+        </div>
+      )}
     </div>
   )
 }

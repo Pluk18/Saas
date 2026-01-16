@@ -2,275 +2,353 @@
 
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/Layout/MainLayout'
-import {
-  ArrowLeft,
-  Users,
-  UserPlus,
+import { 
+  Users, 
+  UserPlus, 
   TrendingUp,
-  ShoppingBag
+  ArrowLeft,
+  Phone,
+  Mail
 } from 'lucide-react'
 import Link from 'next/link'
-import KPICard from '@/components/Reports/KPICard'
-import DateRangePicker from '@/components/Reports/DateRangePicker'
-import ExportButton from '@/components/Reports/ExportButton'
-import { getCustomerReport, getTopCustomers, getNewCustomers } from '@/lib/supabaseAPI'
 import { formatCurrency } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { useReports } from '@/hooks/useReports'
+import DateRangePicker from '@/components/Reports/DateRangePicker'
+import KPICard from '@/components/Reports/KPICard'
+import ExportButton from '@/components/Reports/ExportButton'
 
 export default function CustomersReportPage() {
-  const [loading, setLoading] = useState(true)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [customers, setCustomers] = useState<any[]>([])
+  const {
+    loading,
+    startDate,
+    endDate,
+    updateDateRange,
+    loadCustomerReport,
+    loadTopCustomers,
+    loadNewCustomers
+  } = useReports()
+
+  const [customerReport, setCustomerReport] = useState<any>(null)
   const [topCustomers, setTopCustomers] = useState<any[]>([])
   const [newCustomers, setNewCustomers] = useState<any[]>([])
 
   useEffect(() => {
-    // Set default date range (last 30 days)
-    const today = new Date()
-    const monthAgo = new Date(today)
-    monthAgo.setDate(today.getDate() - 30)
-    setStartDate(monthAgo.toISOString().split('T')[0])
-    setEndDate(today.toISOString().split('T')[0])
-  }, [])
-
-  useEffect(() => {
-    loadAllCustomers()
-  }, [])
-
-  useEffect(() => {
     if (startDate && endDate) {
-      loadDateRangeData()
+      loadData()
     }
   }, [startDate, endDate])
 
-  const loadAllCustomers = async () => {
-    try {
-      const data = await getCustomerReport()
-      setCustomers(data)
-    } catch (error) {
-      console.error('Error loading customers:', error)
-      toast.error('ไม่สามารถโหลดข้อมูลลูกค้าได้')
-    }
+  const loadData = async () => {
+    const [report, top, newCust] = await Promise.all([
+      loadCustomerReport(),
+      loadTopCustomers(10),
+      loadNewCustomers()
+    ])
+    setCustomerReport(report)
+    setTopCustomers(top)
+    setNewCustomers(newCust)
   }
 
-  const loadDateRangeData = async () => {
-    try {
-      setLoading(true)
-      const [topCust, newCust] = await Promise.all([
-        getTopCustomers(startDate, endDate, 10),
-        getNewCustomers(startDate, endDate)
-      ])
-      setTopCustomers(topCust)
-      setNewCustomers(newCust)
-    } catch (error) {
-      console.error('Error loading customer report:', error)
-      toast.error('ไม่สามารถโหลดรายงานลูกค้าได้')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDateChange = (newStartDate: string, newEndDate: string) => {
-    setStartDate(newStartDate)
-    setEndDate(newEndDate)
-  }
-
-  const exportTopCustomersData = topCustomers.map((c, i) => ({
-    'อันดับ': i + 1,
-    'ชื่อลูกค้า': c.customerName,
-    'เบอร์โทร': c.phoneNumber,
-    'จำนวนซื้อ (ครั้ง)': c.purchaseCount,
-    'ยอดซื้อรวม': c.totalAmount,
-    'ยอดเฉลี่ย': c.totalAmount / c.purchaseCount
-  }))
-
-  const exportNewCustomersData = newCustomers.map(c => ({
-    'ชื่อลูกค้า': c.customer_name,
-    'เบอร์โทร': c.phone_number,
-    'อีเมล': c.email || '-',
-    'วันที่สมัคร': new Date(c.created_at).toLocaleDateString('th-TH')
-  }))
-
-  // Calculate total purchase amount for all customers
-  const totalCustomerPurchases = customers.reduce((sum, c) => {
-    const customerTotal = c.sales_transactions?.reduce((t: number, s: any) => t + (s.total_amount || 0), 0) || 0
-    return sum + customerTotal
-  }, 0)
+  // Calculate customer stats
+  const customersWithPurchases = customerReport?.customers?.map((c: any) => ({
+    ...c,
+    purchaseCount: c.sales_transactions?.length || 0,
+    totalSpent: c.sales_transactions?.reduce((sum: number, t: any) => sum + (t.total_amount || 0), 0) || 0
+  })) || []
 
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Page Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/reports" className="btn btn-outline btn-sm">
+          <div>
+            <Link
+              href="/reports"
+              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-2"
+            >
               <ArrowLeft size={18} />
-              กลับ
+              กลับไปหน้ารายงาน
             </Link>
-            <div>
-              <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
-                รายงานลูกค้า
-              </h1>
-              <p className="text-neutral-600">
-                วิเคราะห์ลูกค้า ลูกค้าที่ซื้อมากที่สุด และลูกค้าใหม่
-              </p>
-            </div>
+            <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
+              รายงานลูกค้า
+            </h1>
+            <p className="text-neutral-600">
+              ดูข้อมูลลูกค้า ลูกค้าใหม่ และลูกค้าที่ซื้อมากที่สุด
+            </p>
           </div>
         </div>
 
-        {/* Date Range Picker */}
+        {/* Date Range Filter */}
         <DateRangePicker
-          startDate={startDate}
-          endDate={endDate}
-          onDateChange={handleDateChange}
+          onRangeChange={updateDateRange}
+          defaultPreset="month"
         />
 
-        {/* Summary KPIs */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="card animate-pulse">
-                <div className="h-16 bg-neutral-200 rounded"></div>
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="text-neutral-600 mt-4">กำลังโหลดข้อมูล...</p>
+          </div>
+        )}
+
+        {/* Content */}
+        {!loading && customerReport && (
+          <>
+            {/* Summary KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <KPICard
+                title="ลูกค้าทั้งหมด"
+                value={customerReport.totalCustomers}
+                icon={Users}
+                gradient="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200"
+                iconBg="bg-blue-600"
+                subtitle="คนในระบบ"
+              />
+              <KPICard
+                title="ลูกค้าใหม่"
+                value={newCustomers.length}
+                icon={UserPlus}
+                gradient="bg-gradient-to-br from-green-50 to-green-100 border-green-200"
+                iconBg="bg-green-600"
+                subtitle={`ในช่วง ${startDate} - ${endDate}`}
+              />
+              <KPICard
+                title="ลูกค้า VIP"
+                value={topCustomers.length}
+                icon={TrendingUp}
+                gradient="bg-gradient-to-br from-primary-50 to-primary-100 border-primary-200"
+                iconBg="bg-primary-600"
+                subtitle="Top 10 ซื้อมากที่สุด"
+              />
+            </div>
+
+            {/* Top Customers */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-display font-semibold text-neutral-800">
+                  ลูกค้าที่ซื้อมากที่สุด Top 10
+                </h3>
+                <ExportButton
+                  data={topCustomers}
+                  filename={`top-customers-${startDate}-${endDate}`}
+                  columns={[
+                    { key: 'customerName', label: 'ชื่อลูกค้า' },
+                    { key: 'phoneNumber', label: 'เบอร์โทร' },
+                    { key: 'purchaseCount', label: 'จำนวนซื้อ' },
+                    { key: 'totalSpent', label: 'ยอดซื้อรวม' }
+                  ]}
+                />
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <KPICard
-              title="ลูกค้าทั้งหมด"
-              value={customers.length}
-              icon={Users}
-              colorClass="from-blue-50 to-blue-100 border-blue-200"
-              format="number"
-            />
-            <KPICard
-              title="ลูกค้าใหม่"
-              value={newCustomers.length}
-              icon={UserPlus}
-              colorClass="from-green-50 to-green-100 border-green-200"
-              format="number"
-            />
-            <KPICard
-              title="ลูกค้าซื้อมากสุด"
-              value={topCustomers.length > 0 ? topCustomers[0]?.purchaseCount || 0 : 0}
-              icon={TrendingUp}
-              colorClass="from-primary-50 to-primary-100 border-primary-200"
-              format="number"
-            />
-            <KPICard
-              title="ยอดซื้อรวมทั้งหมด"
-              value={totalCustomerPurchases}
-              icon={ShoppingBag}
-              colorClass="from-accent-50 to-accent-100 border-accent-200"
-              format="currency"
-            />
-          </div>
-        )}
 
-        {/* Top Customers */}
-        {!loading && topCustomers.length > 0 && (
-          <div className="card">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-display font-semibold text-neutral-800">
-                ลูกค้าซื้อมากที่สุด Top 10
-              </h3>
-              <ExportButton
-                data={exportTopCustomersData}
-                filename={`top-customers-${startDate}-${endDate}`}
-              />
+              {topCustomers.length > 0 ? (
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th className="w-16">อันดับ</th>
+                        <th>ชื่อลูกค้า</th>
+                        <th>เบอร์โทร</th>
+                        <th className="text-right">จำนวนซื้อ</th>
+                        <th className="text-right">ยอดซื้อรวม</th>
+                        <th className="text-right">ยอดเฉลี่ย</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topCustomers.map((customer, idx) => (
+                        <tr key={idx}>
+                          <td className="text-center">
+                            <div className={`w-8 h-8 rounded-lg ${
+                              idx === 0 ? 'bg-yellow-500' :
+                              idx === 1 ? 'bg-neutral-400' :
+                              idx === 2 ? 'bg-orange-600' :
+                              'bg-primary-600'
+                            } text-white flex items-center justify-center font-bold mx-auto`}>
+                              {idx + 1}
+                            </div>
+                          </td>
+                          <td className="font-medium">{customer.customerName}</td>
+                          <td>
+                            <div className="flex items-center gap-2 text-sm text-neutral-600">
+                              <Phone size={14} />
+                              {customer.phoneNumber || '-'}
+                            </div>
+                          </td>
+                          <td className="text-right font-medium">
+                            {customer.purchaseCount} ครั้ง
+                          </td>
+                          <td className="text-right font-semibold text-primary-700">
+                            {formatCurrency(customer.totalSpent)}
+                          </td>
+                          <td className="text-right text-neutral-600">
+                            {formatCurrency(customer.totalSpent / customer.purchaseCount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-neutral-500">
+                  ไม่มีข้อมูลการซื้อในช่วงเวลานี้
+                </div>
+              )}
             </div>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>อันดับ</th>
-                    <th>ชื่อลูกค้า</th>
-                    <th>เบอร์โทร</th>
-                    <th className="text-right">จำนวนซื้อ</th>
-                    <th className="text-right">ยอดซื้อรวม</th>
-                    <th className="text-right">ยอดเฉลี่ย/ครั้ง</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topCustomers.map((customer, idx) => (
-                    <tr key={idx}>
-                      <td>
-                        <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-sm">
-                          {idx + 1}
+
+            {/* New Customers */}
+            {newCustomers.length > 0 && (
+              <div className="card">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-display font-semibold text-neutral-800">
+                    ลูกค้าใหม่ ({newCustomers.length} คน)
+                  </h3>
+                  <ExportButton
+                    data={newCustomers.map((c: any) => ({
+                      customer_code: c.customer_code,
+                      name: `${c.first_name} ${c.last_name}`,
+                      phone: c.phone,
+                      email: c.email,
+                      created_at: new Date(c.created_at).toLocaleDateString('th-TH')
+                    }))}
+                    filename={`new-customers-${startDate}-${endDate}`}
+                    columns={[
+                      { key: 'customer_code', label: 'รหัสลูกค้า' },
+                      { key: 'name', label: 'ชื่อ-นามสกุล' },
+                      { key: 'phone', label: 'เบอร์โทร' },
+                      { key: 'email', label: 'อีเมล' },
+                      { key: 'created_at', label: 'วันที่สมัคร' }
+                    ]}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {newCustomers.map((customer: any) => (
+                    <div key={customer.id} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-medium text-neutral-900">
+                            {customer.first_name} {customer.last_name}
+                          </p>
+                          <p className="text-sm text-neutral-600">{customer.customer_code}</p>
                         </div>
-                      </td>
-                      <td className="font-medium">{customer.customerName}</td>
-                      <td className="text-neutral-600">{customer.phoneNumber}</td>
-                      <td className="text-right">{customer.purchaseCount} ครั้ง</td>
-                      <td className="text-right font-medium text-primary-700">
-                        {formatCurrency(customer.totalAmount)}
-                      </td>
-                      <td className="text-right text-neutral-600">
-                        {formatCurrency(customer.totalAmount / customer.purchaseCount)}
-                      </td>
-                    </tr>
+                        <span className="badge bg-green-100 text-green-700 border-green-200 text-xs">
+                          ใหม่
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        {customer.phone && (
+                          <div className="flex items-center gap-2 text-neutral-600">
+                            <Phone size={14} />
+                            {customer.phone}
+                          </div>
+                        )}
+                        {customer.email && (
+                          <div className="flex items-center gap-2 text-neutral-600">
+                            <Mail size={14} />
+                            {customer.email}
+                          </div>
+                        )}
+                        <p className="text-neutral-500 text-xs mt-2">
+                          สมัคร: {new Date(customer.created_at).toLocaleDateString('th-TH', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                </div>
+              </div>
+            )}
 
-        {/* New Customers */}
-        {!loading && newCustomers.length > 0 && (
-          <div className="card">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-display font-semibold text-neutral-800">
-                ลูกค้าใหม่ ({newCustomers.length} ราย)
-              </h3>
-              <ExportButton
-                data={exportNewCustomersData}
-                filename={`new-customers-${startDate}-${endDate}`}
-              />
-            </div>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>ชื่อลูกค้า</th>
-                    <th>เบอร์โทร</th>
-                    <th>อีเมล</th>
-                    <th>วันที่สมัคร</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {newCustomers.map((customer) => (
-                    <tr key={customer.customer_id}>
-                      <td className="font-medium">{customer.customer_name}</td>
-                      <td className="text-neutral-600">{customer.phone_number}</td>
-                      <td className="text-neutral-600">{customer.email || '-'}</td>
-                      <td className="text-neutral-600">
-                        {new Date(customer.created_at).toLocaleDateString('th-TH', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+            {/* All Customers */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-display font-semibold text-neutral-800">
+                  ลูกค้าทั้งหมด ({customersWithPurchases.length} คน)
+                </h3>
+                <ExportButton
+                  data={customersWithPurchases.map((c: any) => ({
+                    customer_code: c.customer_code,
+                    name: `${c.first_name} ${c.last_name}`,
+                    phone: c.phone,
+                    email: c.email,
+                    purchase_count: c.purchaseCount,
+                    total_spent: c.totalSpent,
+                    created_at: new Date(c.created_at).toLocaleDateString('th-TH')
+                  }))}
+                  filename={`all-customers-${new Date().toISOString().split('T')[0]}`}
+                  columns={[
+                    { key: 'customer_code', label: 'รหัสลูกค้า' },
+                    { key: 'name', label: 'ชื่อ-นามสกุล' },
+                    { key: 'phone', label: 'เบอร์โทร' },
+                    { key: 'email', label: 'อีเมล' },
+                    { key: 'purchase_count', label: 'จำนวนซื้อ' },
+                    { key: 'total_spent', label: 'ยอดซื้อสะสม' },
+                    { key: 'created_at', label: 'วันที่สมัคร' }
+                  ]}
+                />
+              </div>
 
-        {/* Empty State */}
-        {!loading && topCustomers.length === 0 && newCustomers.length === 0 && (
-          <div className="card text-center py-12">
-            <Users size={48} className="mx-auto text-neutral-400 mb-4" />
-            <h3 className="text-lg font-medium text-neutral-900 mb-2">
-              ไม่มีข้อมูลลูกค้า
-            </h3>
-            <p className="text-neutral-600">
-              ไม่พบข้อมูลลูกค้าในช่วงเวลาที่เลือก
-            </p>
-          </div>
+              {customersWithPurchases.length > 0 ? (
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>รหัสลูกค้า</th>
+                        <th>ชื่อ-นามสกุล</th>
+                        <th>เบอร์โทร</th>
+                        <th>อีเมล</th>
+                        <th className="text-right">จำนวนซื้อ</th>
+                        <th className="text-right">ยอดซื้อสะสม</th>
+                        <th>วันที่สมัคร</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customersWithPurchases
+                        .sort((a: any, b: any) => b.totalSpent - a.totalSpent)
+                        .map((customer: any) => (
+                        <tr key={customer.id}>
+                          <td className="font-medium text-primary-600">
+                            {customer.customer_code}
+                          </td>
+                          <td className="font-medium">
+                            {customer.first_name} {customer.last_name}
+                          </td>
+                          <td className="text-sm">{customer.phone || '-'}</td>
+                          <td className="text-sm">{customer.email || '-'}</td>
+                          <td className="text-right">
+                            {customer.purchaseCount > 0 ? (
+                              <span className="badge badge-primary">
+                                {customer.purchaseCount} ครั้ง
+                              </span>
+                            ) : (
+                              <span className="text-neutral-400">-</span>
+                            )}
+                          </td>
+                          <td className="text-right font-semibold text-primary-700">
+                            {customer.totalSpent > 0 ? formatCurrency(customer.totalSpent) : '-'}
+                          </td>
+                          <td className="text-sm">
+                            {new Date(customer.created_at).toLocaleDateString('th-TH', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-neutral-500">
+                  ยังไม่มีลูกค้าในระบบ
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </MainLayout>

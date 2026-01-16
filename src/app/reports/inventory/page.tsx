@@ -2,260 +2,303 @@
 
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/Layout/MainLayout'
-import {
-  ArrowLeft,
-  Package,
-  DollarSign,
+import { 
+  Package, 
+  DollarSign, 
   CheckCircle,
   XCircle,
-  AlertCircle
+  ArrowLeft,
+  Filter
 } from 'lucide-react'
 import Link from 'next/link'
-import KPICard from '@/components/Reports/KPICard'
-import ExportButton from '@/components/Reports/ExportButton'
-import { getInventoryReport, getInventorySummary } from '@/lib/supabaseAPI'
 import { formatCurrency, formatWeight } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { getInventoryReport } from '@/lib/supabaseAPI'
+import KPICard from '@/components/Reports/KPICard'
+import StatusPieChart from '@/components/Reports/StatusPieChart'
+import ExportButton from '@/components/Reports/ExportButton'
 
 export default function InventoryReportPage() {
   const [loading, setLoading] = useState(true)
-  const [inventory, setInventory] = useState<any[]>([])
-  const [summary, setSummary] = useState<any>(null)
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [inventory, setInventory] = useState<any>(null)
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   useEffect(() => {
-    loadData()
+    loadInventory()
   }, [])
 
-  const loadData = async () => {
+  const loadInventory = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      const [inventoryData, summaryData] = await Promise.all([
-        getInventoryReport(),
-        getInventorySummary()
-      ])
-      setInventory(inventoryData)
-      setSummary(summaryData)
+      const data = await getInventoryReport()
+      setInventory(data)
     } catch (error) {
-      console.error('Error loading inventory report:', error)
-      toast.error('ไม่สามารถโหลดรายงานสินค้าคงคลังได้')
+      console.error('Error loading inventory:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredInventory = inventory.filter((item) => {
-    if (filterStatus !== 'all' && item.status !== filterStatus) return false
-    if (filterCategory !== 'all' && item.product_type !== filterCategory) return false
-    return true
-  })
+  // Filter products
+  const filteredProducts = inventory?.products?.filter((p: any) => {
+    const categoryMatch = categoryFilter === 'all' || p.product_type === categoryFilter
+    const statusMatch = statusFilter === 'all' || p.status === statusFilter
+    return categoryMatch && statusMatch
+  }) || []
 
-  const exportData = filteredInventory.map(item => ({
-    'รหัสสินค้า': item.product_code,
-    'ชื่อสินค้า': item.product_name,
-    'ประเภท': item.product_type === 'ring' ? 'แหวน' :
-             item.product_type === 'necklace' ? 'สร้อยคอ' :
-             item.product_type === 'bracelet' ? 'กำไล' :
-             item.product_type === 'earring' ? 'ต่างหู' :
-             item.product_type === 'amulet' ? 'พระ/จี้' : 'อื่นๆ',
-    'น้ำหนัก (กรัม)': item.weight_grams,
-    'ค่าแรง': item.labor_cost,
-    'ราคาขาย': item.sale_price,
-    'สถานะ': item.status === 'available' ? 'พร้อมขาย' : 'ขายแล้ว'
-  }))
+  // Calculate category breakdown
+  const categoryBreakdown = inventory?.products?.reduce((acc: any, p: any) => {
+    const category = p.product_type || 'อื่นๆ'
+    if (!acc[category]) {
+      acc[category] = { count: 0, value: 0 }
+    }
+    acc[category].count++
+    acc[category].value += p.selling_price || 0
+    return acc
+  }, {}) || {}
 
-  const categories = [
-    { value: 'all', label: 'ทั้งหมด' },
-    { value: 'ring', label: 'แหวน' },
-    { value: 'necklace', label: 'สร้อยคอ' },
-    { value: 'bracelet', label: 'กำไล' },
-    { value: 'earring', label: 'ต่างหู' },
-    { value: 'amulet', label: 'พระ/จี้' },
-    { value: 'other', label: 'อื่นๆ' }
-  ]
+  // Calculate status distribution
+  const statusDistribution = inventory?.products?.reduce((acc: any, p: any) => {
+    const existing = acc.find((item: any) => item.status === p.status)
+    if (existing) {
+      existing.count++
+    } else {
+      acc.push({ status: p.status, count: 1 })
+    }
+    return acc
+  }, []) || []
+
+  // Get unique categories
+  const categories = [...new Set(inventory?.products?.map((p: any) => p.product_type) || [])]
 
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Page Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/reports" className="btn btn-outline btn-sm">
+          <div>
+            <Link
+              href="/reports"
+              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-2"
+            >
               <ArrowLeft size={18} />
-              กลับ
+              กลับไปหน้ารายงาน
             </Link>
-            <div>
-              <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
-                รายงานสินค้าคงคลัง
-              </h1>
-              <p className="text-neutral-600">
-                ตรวจสอบสินค้าคงคลัง มูลค่าสินค้า และสินค้าที่ขายแล้ว
-              </p>
-            </div>
+            <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
+              รายงานสินค้าคงคลัง
+            </h1>
+            <p className="text-neutral-600">
+              ตรวจสอบสินค้าคงคลัง มูลค่า และสถานะสินค้า
+            </p>
           </div>
         </div>
 
-        {/* Summary KPIs */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="card animate-pulse">
-                <div className="h-16 bg-neutral-200 rounded"></div>
-              </div>
-            ))}
-          </div>
-        ) : summary ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <KPICard
-              title="มูลค่าสินค้าคงคลัง"
-              value={summary.totalValue}
-              icon={DollarSign}
-              colorClass="from-green-50 to-green-100 border-green-200"
-              format="currency"
-            />
-            <KPICard
-              title="สินค้าทั้งหมด"
-              value={summary.totalProducts}
-              icon={Package}
-              colorClass="from-blue-50 to-blue-100 border-blue-200"
-              format="number"
-            />
-            <KPICard
-              title="พร้อมขาย"
-              value={summary.availableProducts}
-              icon={CheckCircle}
-              colorClass="from-primary-50 to-primary-100 border-primary-200"
-              format="number"
-            />
-            <KPICard
-              title="ขายแล้ว"
-              value={summary.soldProducts}
-              icon={XCircle}
-              colorClass="from-accent-50 to-accent-100 border-accent-200"
-              format="number"
-            />
-          </div>
-        ) : null}
-
-        {/* Filters */}
-        <div className="card">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="label">ประเภทสินค้า</label>
-              <select
-                className="input"
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-              >
-                {categories.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="label">สถานะ</label>
-              <select
-                className="input"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <option value="all">ทั้งหมด</option>
-                <option value="available">พร้อมขาย</option>
-                <option value="sold">ขายแล้ว</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Inventory Table */}
-        {!loading && filteredInventory.length > 0 && (
-          <div className="card">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-display font-semibold text-neutral-800">
-                รายการสินค้า ({filteredInventory.length} รายการ)
-              </h3>
-              <ExportButton
-                data={exportData}
-                filename={`inventory-report-${new Date().toISOString().split('T')[0]}`}
-              />
-            </div>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>รหัสสินค้า</th>
-                    <th>ชื่อสินค้า</th>
-                    <th>ประเภท</th>
-                    <th className="text-right">น้ำหนัก</th>
-                    <th className="text-right">ค่าแรง</th>
-                    <th className="text-right">ราคาขาย</th>
-                    <th>สถานะ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInventory.map((item) => (
-                    <tr key={item.product_id}>
-                      <td className="font-medium">{item.product_code}</td>
-                      <td>
-                        <div>
-                          <p className="font-medium">{item.product_name}</p>
-                          {item.pattern_name && (
-                            <p className="text-sm text-neutral-600">{item.pattern_name}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-neutral-100 text-neutral-700">
-                          {item.product_type === 'ring' && 'แหวน'}
-                          {item.product_type === 'necklace' && 'สร้อยคอ'}
-                          {item.product_type === 'bracelet' && 'กำไล'}
-                          {item.product_type === 'earring' && 'ต่างหู'}
-                          {item.product_type === 'amulet' && 'พระ/จี้'}
-                          {item.product_type === 'other' && 'อื่นๆ'}
-                        </span>
-                      </td>
-                      <td className="text-right">
-                        {formatWeight(item.weight_grams)} กรัม
-                      </td>
-                      <td className="text-right">{formatCurrency(item.labor_cost)}</td>
-                      <td className="text-right font-medium text-primary-700">
-                        {formatCurrency(item.sale_price)}
-                      </td>
-                      <td>
-                        {item.status === 'available' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">
-                            <CheckCircle size={14} />
-                            พร้อมขาย
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-neutral-100 text-neutral-700">
-                            <XCircle size={14} />
-                            ขายแล้ว
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="text-neutral-600 mt-4">กำลังโหลดข้อมูล...</p>
           </div>
         )}
 
-        {/* Empty State */}
-        {!loading && filteredInventory.length === 0 && (
-          <div className="card text-center py-12">
-            <Package size={48} className="mx-auto text-neutral-400 mb-4" />
-            <h3 className="text-lg font-medium text-neutral-900 mb-2">
-              ไม่มีสินค้า
-            </h3>
-            <p className="text-neutral-600">
-              ไม่พบสินค้าที่ตรงกับตัวกรองที่เลือก
-            </p>
-          </div>
+        {/* Content */}
+        {!loading && inventory && (
+          <>
+            {/* Summary KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <KPICard
+                title="มูลค่ารวม"
+                value={formatCurrency(inventory.totalValue)}
+                icon={DollarSign}
+                gradient="bg-gradient-to-br from-green-50 to-green-100 border-green-200"
+                iconBg="bg-green-600"
+              />
+              <KPICard
+                title="สินค้าทั้งหมด"
+                value={`${inventory.totalProducts} ชิ้น`}
+                icon={Package}
+                gradient="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200"
+                iconBg="bg-blue-600"
+              />
+              <KPICard
+                title="พร้อมขาย"
+                value={`${inventory.availableProducts} ชิ้น`}
+                icon={CheckCircle}
+                gradient="bg-gradient-to-br from-primary-50 to-primary-100 border-primary-200"
+                iconBg="bg-primary-600"
+              />
+              <KPICard
+                title="ขายแล้ว"
+                value={`${inventory.soldProducts} ชิ้น`}
+                icon={XCircle}
+                gradient="bg-gradient-to-br from-neutral-50 to-neutral-100 border-neutral-200"
+                iconBg="bg-neutral-600"
+              />
+            </div>
+
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Status Distribution */}
+              <StatusPieChart data={statusDistribution} />
+
+              {/* Category Breakdown */}
+              <div className="card">
+                <h3 className="text-lg font-display font-semibold text-neutral-800 mb-4">
+                  แยกตามประเภท
+                </h3>
+                <div className="space-y-3">
+                  {Object.entries(categoryBreakdown).map(([category, data]: [string, any]) => (
+                    <div key={category} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-neutral-900">{category}</p>
+                        <p className="text-sm text-neutral-600">{data.count} ชิ้น</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-primary-700">
+                          {formatCurrency(data.value)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {Object.keys(categoryBreakdown).length === 0 && (
+                    <div className="text-center py-8 text-neutral-500">
+                      ไม่มีข้อมูล
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="card">
+              <div className="flex flex-wrap gap-4 items-center">
+                <Filter size={20} className="text-neutral-600" />
+                <div className="flex-1 min-w-[200px]">
+                  <label className="label">ประเภทสินค้า</label>
+                  <select
+                    className="input"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                  >
+                    <option value="all">ทั้งหมด</option>
+                    {categories.map((cat: any) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label className="label">สถานะ</label>
+                  <select
+                    className="input"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="all">ทั้งหมด</option>
+                    <option value="available">พร้อมขาย</option>
+                    <option value="sold">ขายแล้ว</option>
+                    <option value="reserved">จอง</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Inventory Table */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-display font-semibold text-neutral-800">
+                  รายการสินค้าทั้งหมด ({filteredProducts.length} ชิ้น)
+                </h3>
+                <ExportButton
+                  data={filteredProducts.map((p: any) => ({
+                    product_code: p.product_code,
+                    product_name: p.product_name,
+                    product_type: p.product_type,
+                    weight_baht: p.weight_baht,
+                    selling_price: p.selling_price,
+                    status: p.status,
+                    created_at: new Date(p.created_at).toLocaleDateString('th-TH')
+                  }))}
+                  filename={`inventory-${new Date().toISOString().split('T')[0]}`}
+                  columns={[
+                    { key: 'product_code', label: 'รหัสสินค้า' },
+                    { key: 'product_name', label: 'ชื่อสินค้า' },
+                    { key: 'product_type', label: 'ประเภท' },
+                    { key: 'weight_baht', label: 'น้ำหนัก (บาท)' },
+                    { key: 'selling_price', label: 'ราคาขาย' },
+                    { key: 'status', label: 'สถานะ' },
+                    { key: 'created_at', label: 'วันที่เพิ่ม' }
+                  ]}
+                />
+              </div>
+
+              {filteredProducts.length > 0 ? (
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>รหัสสินค้า</th>
+                        <th>ชื่อสินค้า</th>
+                        <th>ประเภท</th>
+                        <th className="text-right">น้ำหนัก</th>
+                        <th className="text-right">ราคาขาย</th>
+                        <th>สถานะ</th>
+                        <th>วันที่เพิ่ม</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.map((product: any) => (
+                        <tr key={product.id}>
+                          <td className="font-medium text-primary-600">
+                            {product.product_code}
+                          </td>
+                          <td>{product.product_name}</td>
+                          <td>
+                            <span className="badge badge-outline">
+                              {product.product_type}
+                            </span>
+                          </td>
+                          <td className="text-right">
+                            {formatWeight(product.weight_baht)}
+                          </td>
+                          <td className="text-right font-semibold text-primary-700">
+                            {formatCurrency(product.selling_price)}
+                          </td>
+                          <td>
+                            {product.status === 'available' && (
+                              <span className="badge bg-green-100 text-green-700 border-green-200">
+                                พร้อมขาย
+                              </span>
+                            )}
+                            {product.status === 'sold' && (
+                              <span className="badge bg-neutral-100 text-neutral-700 border-neutral-200">
+                                ขายแล้ว
+                              </span>
+                            )}
+                            {product.status === 'reserved' && (
+                              <span className="badge bg-orange-100 text-orange-700 border-orange-200">
+                                จอง
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-sm">
+                            {new Date(product.created_at).toLocaleDateString('th-TH', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-neutral-500">
+                  ไม่มีสินค้าที่ตรงกับเงื่อนไข
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </MainLayout>

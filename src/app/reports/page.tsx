@@ -1,67 +1,35 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import MainLayout from '@/components/Layout/MainLayout'
-import {
-  FileText,
-  DollarSign,
-  TrendingUp,
-  Package,
+import { 
+  DollarSign, 
+  TrendingUp, 
+  Package, 
   ShoppingCart,
+  FileText,
   Users,
-  HandCoins,
-  PiggyBank
+  FileSignature,
+  PiggyBank,
+  BarChart3
 } from 'lucide-react'
-import KPICard from '@/components/Reports/KPICard'
-import ReportCard from '@/components/Reports/ReportCard'
+import { formatCurrency, formatNumber } from '@/lib/utils'
+import { useReports } from '@/hooks/useReports'
 import DateRangePicker from '@/components/Reports/DateRangePicker'
+import KPICard from '@/components/Reports/KPICard'
 import SalesChart from '@/components/Reports/SalesChart'
-import { getSalesSummary, getDailySalesReport } from '@/lib/supabaseAPI'
-import toast from 'react-hot-toast'
+import ReportCard from '@/components/Reports/ReportCard'
+import ExportButton from '@/components/Reports/ExportButton'
 
 export default function ReportsPage() {
-  const [loading, setLoading] = useState(true)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [summary, setSummary] = useState<any>(null)
-  const [dailyData, setDailyData] = useState<any[]>([])
-
-  useEffect(() => {
-    // Set default date range (last 30 days)
-    const today = new Date()
-    const monthAgo = new Date(today)
-    monthAgo.setDate(today.getDate() - 30)
-    setStartDate(monthAgo.toISOString().split('T')[0])
-    setEndDate(today.toISOString().split('T')[0])
-  }, [])
-
-  useEffect(() => {
-    if (startDate && endDate) {
-      loadData()
-    }
-  }, [startDate, endDate])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const [summaryData, dailySales] = await Promise.all([
-        getSalesSummary(startDate, endDate),
-        getDailySalesReport(startDate, endDate)
-      ])
-      setSummary(summaryData)
-      setDailyData(dailySales)
-    } catch (error) {
-      console.error('Error loading reports data:', error)
-      toast.error('ไม่สามารถโหลดข้อมูลรายงานได้')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDateChange = (newStartDate: string, newEndDate: string) => {
-    setStartDate(newStartDate)
-    setEndDate(newEndDate)
-  }
+  const {
+    loading,
+    startDate,
+    endDate,
+    updateDateRange,
+    salesSummary,
+    dailySales,
+    topProducts
+  } = useReports()
 
   return (
     <MainLayout>
@@ -70,111 +38,265 @@ export default function ReportsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
-              รายงานและสถิติ
+              รายงาน
             </h1>
-            <p className="text-neutral-600">
-              ดูรายงานและวิเคราะห์ข้อมูลธุรกิจของคุณ
-            </p>
+            <p className="text-neutral-600">ดูรายงานและสถิติต่างๆ ของระบบ</p>
           </div>
         </div>
 
-        {/* Date Range Picker */}
+        {/* Date Range Filter */}
         <DateRangePicker
-          startDate={startDate}
-          endDate={endDate}
-          onDateChange={handleDateChange}
+          onRangeChange={updateDateRange}
+          defaultPreset="month"
         />
 
-        {/* KPI Cards */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="card animate-pulse">
-                <div className="h-16 bg-neutral-200 rounded"></div>
-              </div>
-            ))}
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="text-neutral-600 mt-4">กำลังโหลดข้อมูล...</p>
           </div>
-        ) : summary ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <KPICard
-              title="ยอดขายสุทธิ"
-              value={summary.netAmount}
-              icon={DollarSign}
-              colorClass="from-green-50 to-green-100 border-green-200"
-              format="currency"
-            />
-            <KPICard
-              title="ยอดขายรวม"
-              value={summary.totalSales}
-              icon={ShoppingCart}
-              colorClass="from-blue-50 to-blue-100 border-blue-200"
-              format="currency"
-            />
-            <KPICard
-              title="จำนวนบิล"
-              value={summary.transactionCount}
-              icon={FileText}
-              colorClass="from-primary-50 to-primary-100 border-primary-200"
-              format="number"
-            />
-            <KPICard
-              title="ยอดเฉลี่ย/บิล"
-              value={summary.averagePerTransaction}
-              icon={TrendingUp}
-              colorClass="from-accent-50 to-accent-100 border-accent-200"
-              format="currency"
-            />
-          </div>
-        ) : null}
-
-        {/* Sales Chart */}
-        {!loading && dailyData.length > 0 && (
-          <SalesChart data={dailyData} title="กราฟยอดขายรายวัน" />
         )}
 
-        {/* Report Cards */}
-        <div>
-          <h2 className="text-2xl font-display font-bold text-neutral-900 mb-4">
-            รายงานทั้งหมด
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <ReportCard
-              title="รายงานยอดขาย"
-              description="ดูรายละเอียดยอดขาย สินค้าขายดี และช่องทางชำระเงิน"
-              icon={ShoppingCart}
-              href="/reports/sales"
-              iconColor="bg-green-600"
-            />
-            <ReportCard
-              title="รายงานสินค้าคงคลัง"
-              description="ตรวจสอบสินค้าคงคลัง มูลค่าสินค้า และสินค้าที่ขายแล้ว"
-              icon={Package}
-              href="/reports/inventory"
-              iconColor="bg-blue-600"
-            />
-            <ReportCard
-              title="รายงานลูกค้า"
-              description="วิเคราะห์ลูกค้า ลูกค้าที่ซื้อมากที่สุด และลูกค้าใหม่"
-              icon={Users}
-              href="/reports/customers"
-              iconColor="bg-purple-600"
-            />
-            <ReportCard
-              title="รายงานฝากขาย"
-              description="ดูสัญญาฝากขาย ดอกเบี้ย และสถานะสัญญา"
-              icon={HandCoins}
-              href="/reports/consignments"
-              iconColor="bg-amber-600"
-            />
-            <ReportCard
-              title="รายงานออมทอง"
-              description="ติดตามบัญชีออมทอง ยอดเงิน และความคืบหน้า"
-              icon={PiggyBank}
-              href="/reports/gold-savings"
-              iconColor="bg-primary-600"
-            />
-          </div>
-        </div>
+        {/* Quick Stats */}
+        {!loading && salesSummary && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <KPICard
+                title="ยอดขายรวม"
+                value={formatCurrency(salesSummary.totalNet)}
+                icon={DollarSign}
+                gradient="bg-gradient-to-br from-green-50 to-green-100 border-green-200"
+                iconBg="bg-green-600"
+                subtitle={`${salesSummary.transactionCount} รายการ`}
+              />
+
+              <KPICard
+                title="ยอดเฉลี่ยต่อบิล"
+                value={formatCurrency(salesSummary.avgPerTransaction)}
+                icon={TrendingUp}
+                gradient="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200"
+                iconBg="bg-blue-600"
+              />
+
+              <KPICard
+                title="สินค้าขายออก"
+                value={`${salesSummary.totalItems} ชิ้น`}
+                icon={Package}
+                gradient="bg-gradient-to-br from-primary-50 to-primary-100 border-primary-200"
+                iconBg="bg-primary-600"
+              />
+
+              <KPICard
+                title="จำนวนบิล"
+                value={salesSummary.transactionCount}
+                icon={ShoppingCart}
+                gradient="bg-gradient-to-br from-accent-50 to-accent-100 border-accent-200"
+                iconBg="bg-accent-600"
+              />
+            </div>
+
+            {/* Sales Chart */}
+            <SalesChart data={dailySales} />
+
+            {/* Report Links */}
+            <div className="card">
+              <h3 className="text-lg font-display font-semibold text-neutral-800 mb-6">
+                รายงานทั้งหมด
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ReportCard
+                  title="รายงานยอดขาย"
+                  description="ดูรายละเอียดยอดขาย สินค้าขายดี และช่องทางการชำระเงิน"
+                  icon={BarChart3}
+                  href="/reports/sales"
+                  iconColor="text-green-600"
+                  iconBg="bg-green-100"
+                />
+                <ReportCard
+                  title="รายงานสินค้าคงคลัง"
+                  description="ตรวจสอบสินค้าคงคลัง มูลค่า และสถานะสินค้า"
+                  icon={Package}
+                  href="/reports/inventory"
+                  iconColor="text-blue-600"
+                  iconBg="bg-blue-100"
+                />
+                <ReportCard
+                  title="รายงานลูกค้า"
+                  description="ดูข้อมูลลูกค้า ลูกค้าใหม่ และลูกค้าที่ซื้อมากที่สุด"
+                  icon={Users}
+                  href="/reports/customers"
+                  iconColor="text-purple-600"
+                  iconBg="bg-purple-100"
+                />
+                <ReportCard
+                  title="รายงานขายฝาก"
+                  description="ตรวจสอบสัญญาขายฝาก สถานะ และสัญญาที่ใกล้หมดอายุ"
+                  icon={FileSignature}
+                  href="/reports/pawn"
+                  iconColor="text-orange-600"
+                  iconBg="bg-orange-100"
+                />
+                <ReportCard
+                  title="รายงานออมทอง"
+                  description="ดูข้อมูลบัญชีออมทอง ยอดเงินรวม และบัญชีที่ใกล้ถึงเป้าหมาย"
+                  icon={PiggyBank}
+                  href="/reports/gold-savings"
+                  iconColor="text-amber-600"
+                  iconBg="bg-amber-100"
+                />
+              </div>
+            </div>
+
+            {/* Daily Sales Summary */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-display font-semibold text-neutral-800">
+                  สรุปยอดขายรายวัน
+                </h3>
+                <ExportButton
+                  data={dailySales}
+                  filename={`sales-daily-${startDate}-${endDate}`}
+                  columns={[
+                    { key: 'date', label: 'วันที่' },
+                    { key: 'count', label: 'จำนวนบิล' },
+                    { key: 'totalSales', label: 'ยอดขาย' },
+                    { key: 'totalDiscount', label: 'ส่วนลด' },
+                    { key: 'totalTradeIn', label: 'เทิร์นทอง' },
+                    { key: 'totalVat', label: 'VAT' },
+                    { key: 'totalNet', label: 'ยอดสุทธิ' }
+                  ]}
+                />
+              </div>
+              
+              {dailySales.length > 0 ? (
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>วันที่</th>
+                        <th className="text-right">จำนวนบิล</th>
+                        <th className="text-right">ยอดขาย</th>
+                        <th className="text-right">ส่วนลด</th>
+                        <th className="text-right">เทิร์นทอง</th>
+                        <th className="text-right">VAT</th>
+                        <th className="text-right">ยอดสุทธิ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailySales.map((day, idx) => (
+                        <tr key={idx}>
+                          <td className="font-medium">
+                            {new Date(day.date).toLocaleDateString('th-TH', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              weekday: 'short'
+                            })}
+                          </td>
+                          <td className="text-right">{day.count}</td>
+                          <td className="text-right font-medium">
+                            {formatCurrency(day.totalSales)}
+                          </td>
+                          <td className="text-right text-red-600">
+                            -{formatCurrency(day.totalDiscount)}
+                          </td>
+                          <td className="text-right text-red-600">
+                            -{formatCurrency(day.totalTradeIn)}
+                          </td>
+                          <td className="text-right text-green-600">
+                            +{formatCurrency(day.totalVat)}
+                          </td>
+                          <td className="text-right font-bold text-primary-700">
+                            {formatCurrency(day.totalNet)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-primary-50 font-semibold">
+                        <td>รวม</td>
+                        <td className="text-right">{salesSummary.transactionCount}</td>
+                        <td className="text-right">
+                          {formatCurrency(salesSummary.totalSales)}
+                        </td>
+                        <td className="text-right text-red-600">
+                          -{formatCurrency(salesSummary.totalDiscount)}
+                        </td>
+                        <td className="text-right text-red-600">
+                          -{formatCurrency(salesSummary.totalTradeIn)}
+                        </td>
+                        <td className="text-right text-green-600">
+                          +{formatCurrency(salesSummary.totalVat)}
+                        </td>
+                        <td className="text-right text-primary-700">
+                          {formatCurrency(salesSummary.totalNet)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-neutral-500">
+                  ไม่มีข้อมูลการขายในช่วงเวลานี้
+                </div>
+              )}
+            </div>
+
+            {/* Top Selling Products */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-display font-semibold text-neutral-800">
+                  สินค้าขายดี Top 10
+                </h3>
+                <ExportButton
+                  data={topProducts}
+                  filename={`top-products-${startDate}-${endDate}`}
+                  columns={[
+                    { key: 'productCode', label: 'รหัสสินค้า' },
+                    { key: 'productName', label: 'ชื่อสินค้า' },
+                    { key: 'productType', label: 'ประเภท' },
+                    { key: 'quantitySold', label: 'จำนวนที่ขาย' },
+                    { key: 'totalRevenue', label: 'รายได้รวม' }
+                  ]}
+                />
+              </div>
+              
+              {topProducts.length > 0 ? (
+                <div className="space-y-4">
+                  {topProducts.map((product, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-4 p-4 bg-neutral-50 rounded-lg hover:bg-neutral-100 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-primary-600 text-white flex items-center justify-center font-bold">
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-neutral-900">
+                          {product.productName}
+                        </p>
+                        <p className="text-sm text-neutral-600">
+                          {product.productCode} • ขายได้ {product.quantitySold} ชิ้น
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-primary-700">
+                          {formatCurrency(product.totalRevenue)}
+                        </p>
+                        <p className="text-sm text-neutral-600">
+                          เฉลี่ย {formatCurrency(product.totalRevenue / product.quantitySold)}/ชิ้น
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-neutral-500">
+                  ไม่มีข้อมูลสินค้าในช่วงเวลานี้
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </MainLayout>
   )

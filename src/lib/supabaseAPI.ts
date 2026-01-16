@@ -1481,3 +1481,120 @@ export async function getGoldSavingsTransactionReport(startDate: string, endDate
     totalWithdrawals
   }
 }
+
+// ============================================
+// SETTINGS API
+// ============================================
+
+export async function getStoreSetting(key: string) {
+  const { data, error } = await supabase
+    .from('store_settings')
+    .select('setting_value')
+    .eq('setting_key', key)
+    .single()
+
+  if (error) throw error
+  return data?.setting_value
+}
+
+export async function updateStoreSetting(key: string, value: any) {
+  const { data, error } = await supabase
+    .from('store_settings')
+    .update({
+      setting_value: value,
+      updated_at: new Date().toISOString()
+    })
+    .eq('setting_key', key)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getAllSettings() {
+  const { data, error } = await supabase
+    .from('store_settings')
+    .select('*')
+    .order('setting_key')
+
+  if (error) throw error
+  return data
+}
+
+// ============================================
+// NOTIFICATIONS API
+// ============================================
+
+export async function getNotifications(unreadOnly: boolean = false) {
+  let query = supabase
+    .from('notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (unreadOnly) {
+    query = query.eq('is_read', false)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data
+}
+
+export async function markNotificationAsRead(id: string) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .update({
+      is_read: true,
+      read_at: new Date().toISOString()
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function markAllNotificationsAsRead() {
+  const { data, error } = await supabase
+    .from('notifications')
+    .update({
+      is_read: true,
+      read_at: new Date().toISOString()
+    })
+    .eq('is_read', false)
+    .select()
+
+  if (error) throw error
+  return data
+}
+
+export async function createNotification(notification: {
+  notification_type: string
+  title: string
+  message: string
+  link?: string
+  related_id?: string
+  priority?: string
+}) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert(notification)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteNotification(id: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
